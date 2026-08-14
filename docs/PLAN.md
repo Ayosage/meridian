@@ -1,0 +1,19 @@
+# Meridian — Task Plan
+
+Rules: work top to bottom, one task per PR, tests pass before PR. The rules
+engine (`packages/rules`) must never import three/react — it runs on the
+server and in unit tests headlessly.
+
+- [ ] Scaffold Turborepo: `apps/client` (Vite + R3F + TypeScript), `apps/server` (Node + ws + TypeScript), `packages/rules`, `packages/protocol` (zod message schemas); Vitest wired in all packages; README
+- [ ] `packages/rules`: core types — `GameState`, `PlayerId`, hex-grid `Coord` with neighbor/distance helpers; property tests on hex math
+- [ ] `packages/rules`: declarative ruleset format (piece defs: movement pattern, capture rule) + placeholder ruleset JSON; loader with zod validation
+- [ ] `packages/rules`: `applyIntent(state, intent) -> state | RuleError` — pure reducer for move/capture/end-turn; exhaustive unit tests incl. illegal intents
+- [ ] `packages/rules`: win detection (last player standing) + turn rotation; tests
+- [ ] `packages/protocol`: client↔server message schemas (join, intent, state-sync, error, reconnect) shared by both apps
+- [ ] `apps/server`: lobby with join codes; two clients join a room, receive initial state; integration test with two ws clients
+- [ ] `apps/server`: authoritative loop — validate intent via rules engine, broadcast resulting state; reject out-of-turn intents; tests
+- [ ] `apps/server`: reconnection — client rejoins with token, receives full state snapshot; test covering drop mid-turn
+- [ ] `apps/client`: R3F board rendering from `GameState` (instanced hex tiles, placeholder piece meshes), zustand store fed by ws messages
+- [ ] `apps/client`: raycast tile/piece selection → intent sending; legal-move highlighting from rules engine
+- [ ] `apps/client`: first custom shader — board surface material (animated, stylized); document shader approach in `docs/SHADERS.md`
+- [ ] Milestone 1 check: two-browser full match E2E script; perf snapshot (draw calls, fps) recorded in `docs/PERF.md`
