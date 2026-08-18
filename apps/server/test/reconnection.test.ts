@@ -67,7 +67,14 @@ describe('reconnection', () => {
 
     // The reconnected client can act when it is their turn.
     c1b.send('intent', { type: 'move', pieceId: 'p1-0', to: { q: 2, r: 0 } })
-    await room.waitForNextPatch()
+    // waitForNextPatch resolves on the room's next scheduled patch tick
+    // (colyseus patches on a fixed ~50ms interval regardless of whether
+    // anything changed), not specifically on the tick carrying this
+    // intent's effect — poll a couple of ticks rather than assume one is
+    // enough.
+    for (let i = 0; i < 5 && room.state.seq !== 2; i++) {
+      await room.waitForNextPatch()
+    }
     expect(room.state.seq).toBe(2)
   })
 
@@ -101,17 +108,74 @@ describe('reconnection', () => {
     expect(room.state.phase).toBe('waiting')
 
     await c0.leave(false) // drop before a second player joins
+    // Same client-leave-vs-server-onLeave race as the reconnect test above:
+    // give the server's onLeave time to run before asserting on its effect.
+    await new Promise((resolve) => setTimeout(resolve, 100))
     await room.waitForNextPatch()
     expect(room.state.seats.length).toBe(0)
 
-    const c1 = await server.connectTo(room)
+    // Join by the room's code (not connectTo, which bypasses matchmaking)
+    // to prove the join code itself still works — the whole point of the
+    // resetAutoDisposeTimeout call this exercises.
+    const c1 = await server.sdk.joinById(room.roomId)
     muteUnhandled(c1)
-    const c2 = await server.connectTo(room)
+    const c2 = await server.sdk.joinById(room.roomId)
     muteUnhandled(c2)
     await room.waitForNextPatch()
 
     expect(room.state.phase).toBe('playing')
     expect(room.state.seats.length).toBe(2)
     expect(Array.from(room.state.seats)).toEqual([c1.sessionId, c2.sessionId])
+  })
+
+  it('a win that lands during a grace window is not overwritten when the grace later expires', async () => {
+    const { room, c0, c1 } = await createMatch(1)
+
+    const endedEvents: { reason: string; winner: number }[] = []
+    const firstEnded = new Promise<{ reason: string; winner: number }>((resolve) => {
+      c0.onMessage('matchEnded', (payload: { reason: string; winner: number }) => {
+        endedEvents.push(payload)
+        if (endedEvents.length === 1) resolve(payload)
+      })
+    })
+
+    // Seat 0 marches p0-0 across the board, capturing two of seat 1's three
+    // pieces (same script as match-room.test.ts's scripted win), leaving one
+    // decisive capturing move still to play.
+    const preliminaryPath = [
+      { q: -2, r: 0 },
+      { q: -1, r: 0 },
+      { q: 0, r: 0 },
+      { q: 1, r: 0 },
+      { q: 2, r: 0 },
+      { q: 3, r: 0 }, // captures p1-0
+      { q: 3, r: -1 }, // captures p1-1
+    ]
+    for (const to of preliminaryPath) {
+      c0.send('intent', { type: 'move', pieceId: 'p0-0', to })
+      await room.waitForNextPatch()
+      c1.send('intent', { type: 'endTurn' })
+      await room.waitForNextPatch()
+    }
+
+    // Drop seat 1 right before the winning move: the grace window (1s) is
+    // now ticking concurrently with the match finishing by a normal win.
+    await c1.leave(false)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    c0.send('intent', { type: 'move', pieceId: 'p0-0', to: { q: 3, r: -2 } }) // captures p1-2, wins
+    await room.waitForNextPatch()
+
+    const result = await firstEnded
+    expect(result).toEqual({ reason: 'win', winner: 0 })
+    expect(room.state.phase).toBe('ended')
+    expect(room.state.winner).toBe(0)
+
+    // Wait past the 1s grace window: it must not re-fire a forfeit on top
+    // of the win, nor flip the winner.
+    await new Promise((resolve) => setTimeout(resolve, 1300))
+    expect(endedEvents.length).toBe(1)
+    expect(room.state.phase).toBe('ended')
+    expect(room.state.winner).toBe(0)
   })
 })

@@ -86,21 +86,25 @@ export class MatchRoom extends Room<MatchState> {
         await this.allowReconnection(client, this.graceSeconds)
         // Same sessionId, same seat. Schema sync converges the client via
         // the normal state patch; the snapshot is the belt-and-braces
-        // full-state resend (spec §4). Deferred a tick so it lands after
-        // the client's own join handshake has resolved and it has had a
-        // chance to register a 'snapshot' listener, instead of racing the
-        // JOIN_ROOM/full-state flush that resolves `reconnect()`.
-        if (this.game) {
-          const gs = this.game
-          setTimeout(() => client.send(MSG.SNAPSHOT, { state: gs }), 0)
-        }
+        // full-state resend (spec §4). `afterNextPatch` queues it behind
+        // colyseus's own patch broadcast instead of a raw send, so it can't
+        // race the client's join handshake — no timer needed. Reading
+        // `this.game` here (not a captured local) keeps it current even if
+        // an intent lands in the same tick the reconnection resolves.
+        if (this.game) client.send(MSG.SNAPSHOT, { state: this.game }, { afterNextPatch: true })
         return
       } catch {
         // grace window expired — fall through to forfeit
       }
     }
 
+    // The match may have already ended while we were awaiting the grace
+    // window above (a win, or the opponent's own forfeit/consented leave);
+    // don't clobber that outcome with a second matchEnded / winner flip.
+    if (this.state.phase !== 'playing') return
+
     const seat = this.seatOf(client)
+    if (seat === -1) return
     const winner = seat === 0 ? 1 : 0
     this.state.phase = 'ended'
     this.state.winner = winner
