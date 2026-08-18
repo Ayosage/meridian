@@ -1,15 +1,7 @@
 import { coordKey, coordsEqual, distance, inRadius } from './coord'
 import { ruleError, type Intent, type RuleError } from './intent'
 import type { GameState } from './state'
-
-/** Naive rotation — replaced by win-aware advanceTurn in the win task. */
-function advanceTurnNaive(state: GameState): GameState {
-  return {
-    ...state,
-    seq: state.seq + 1,
-    currentPlayer: (state.currentPlayer + 1) % state.ruleset.playerCount,
-  }
-}
+import { advanceTurn } from './win'
 
 /** Pure reducer: returns a new state or a RuleError; never mutates input. */
 export function applyIntent(state: GameState, intent: Intent): GameState | RuleError {
@@ -17,7 +9,7 @@ export function applyIntent(state: GameState, intent: Intent): GameState | RuleE
   if (intent.player !== state.currentPlayer)
     return ruleError('NOT_YOUR_TURN', `it is player ${state.currentPlayer}'s turn`)
 
-  if (intent.type === 'endTurn') return advanceTurnNaive(state)
+  if (intent.type === 'endTurn') return advanceTurn(state)
 
   const piece = state.pieces.find((p) => p.id === intent.pieceId)
   if (!piece) return ruleError('UNKNOWN_PIECE', `no piece "${intent.pieceId}"`)
@@ -42,5 +34,5 @@ export function applyIntent(state: GameState, intent: Intent): GameState | RuleE
     .filter((p) => p !== occupant)
     .map((p) => (p.id === piece.id ? { ...p, at: intent.to } : p))
 
-  return advanceTurnNaive({ ...state, pieces })
+  return advanceTurn({ ...state, pieces })
 }
