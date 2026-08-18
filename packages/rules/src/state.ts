@@ -1,7 +1,5 @@
 import type { Coord } from './coord'
-
-// Replaced by `import type { Ruleset } from './ruleset'` in the ruleset task.
-type Ruleset = unknown
+import type { Ruleset } from './ruleset'
 
 export type PlayerId = number
 

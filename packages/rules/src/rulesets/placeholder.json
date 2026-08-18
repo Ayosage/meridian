@@ -1,0 +1,21 @@
+{
+  "name": "Placeholder Hex Tactics",
+  "board": { "shape": "hex", "radius": 3 },
+  "playerCount": 2,
+  "pieces": [
+    {
+      "type": "runner",
+      "movement": { "pattern": "step", "range": 1 },
+      "capture": { "rule": "displace" }
+    }
+  ],
+  "setup": [
+    { "player": 0, "type": "runner", "at": { "q": -3, "r": 0 } },
+    { "player": 0, "type": "runner", "at": { "q": -3, "r": 1 } },
+    { "player": 0, "type": "runner", "at": { "q": -3, "r": 2 } },
+    { "player": 1, "type": "runner", "at": { "q": 3, "r": 0 } },
+    { "player": 1, "type": "runner", "at": { "q": 3, "r": -1 } },
+    { "player": 1, "type": "runner", "at": { "q": 3, "r": -2 } }
+  ],
+  "win": { "rule": "lastPlayerStanding" }
+}
