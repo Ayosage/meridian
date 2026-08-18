@@ -67,10 +67,44 @@ export class MatchRoom extends Room<MatchState> {
   }
 
   async onLeave(client: Client, consented: boolean) {
-    // Reconnection handling lands in the next task; for now a leave during
-    // play simply keeps the seat (sessionId stays in seats).
-    void client
-    void consented
+    if (this.state.phase === 'waiting') {
+      // Dropped before the match started: free the seat so the room can
+      // still fill instead of wedging with a dead sessionId. Colyseus's
+      // default autoDispose would otherwise tear the room down the instant
+      // it hits zero clients, orphaning the join code; give it a window to
+      // accept a replacement joiner instead.
+      const idx = this.seatOf(client)
+      if (idx !== -1) this.state.seats.splice(idx, 1)
+      if (this.state.seats.length === 0) this.resetAutoDisposeTimeout(this.graceSeconds)
+      return
+    }
+
+    if (this.state.phase !== 'playing') return
+
+    if (!consented) {
+      try {
+        await this.allowReconnection(client, this.graceSeconds)
+        // Same sessionId, same seat. Schema sync converges the client via
+        // the normal state patch; the snapshot is the belt-and-braces
+        // full-state resend (spec §4). Deferred a tick so it lands after
+        // the client's own join handshake has resolved and it has had a
+        // chance to register a 'snapshot' listener, instead of racing the
+        // JOIN_ROOM/full-state flush that resolves `reconnect()`.
+        if (this.game) {
+          const gs = this.game
+          setTimeout(() => client.send(MSG.SNAPSHOT, { state: gs }), 0)
+        }
+        return
+      } catch {
+        // grace window expired — fall through to forfeit
+      }
+    }
+
+    const seat = this.seatOf(client)
+    const winner = seat === 0 ? 1 : 0
+    this.state.phase = 'ended'
+    this.state.winner = winner
+    this.broadcast(MSG.MATCH_ENDED, { reason: 'forfeit', winner })
   }
 
   async onDispose() {
