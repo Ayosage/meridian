@@ -73,6 +73,10 @@ export class MatchRoom extends Room<MatchState> {
       // default autoDispose would otherwise tear the room down the instant
       // it hits zero clients, orphaning the join code; give it a window to
       // accept a replacement joiner instead.
+      // Safe to splice by index rather than reassign: phase 'waiting' implies
+      // seats.length <= 1 (onJoin flips to 'playing' synchronously the
+      // instant a second seat fills), and seat index doubles as player
+      // number, so this can never shift another seated player's index.
       const idx = this.seatOf(client)
       if (idx !== -1) this.state.seats.splice(idx, 1)
       if (this.state.seats.length === 0) this.resetAutoDisposeTimeout(this.graceSeconds)
@@ -108,6 +112,10 @@ export class MatchRoom extends Room<MatchState> {
     const winner = seat === 0 ? 1 : 0
     this.state.phase = 'ended'
     this.state.winner = winner
+    // Converge the plain authoritative state too, not just the schema: a
+    // later reconnect-in-grace SNAPSHOT reads this.game directly, and it
+    // must agree with state.winner rather than staying null.
+    if (this.game) this.game = { ...this.game, winner }
     this.broadcast(MSG.MATCH_ENDED, { reason: 'forfeit', winner })
   }
 

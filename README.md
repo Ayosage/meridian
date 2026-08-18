@@ -28,3 +28,17 @@ Requirements: Node 20+, pnpm 10.
     pnpm --filter client dev   # http://localhost:5173
 
 The server owns all game state: clients send intents, receive state diffs.
+
+## Notes
+
+Two things here look like cleanup opportunities but aren't — please don't
+"fix" them without re-checking first:
+
+- The root `pnpm.overrides` pins `@colyseus/core` to `0.16.24`. `0.16.25`'s
+  published tarball ships an unresolvable `@colyseus/greeting-banner:
+  workspace:^` dependency, which breaks install. Revisit the pin once
+  `>= 0.16.26` is out and confirmed clean.
+- The root `test` script runs `turbo run test --concurrency=1`. This is
+  required, not a leftover: `apps/server`'s reconnection tests use real
+  grace-window timers, and running packages in parallel under turbo starves
+  those timers and makes the tests flaky.

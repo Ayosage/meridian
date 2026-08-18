@@ -8,6 +8,10 @@ function playersWithPieces(state: GameState): Set<PlayerId> {
  * Advance to the next turn: bump seq, detect lastPlayerStanding, rotate to
  * the next player that still owns pieces. When a winner is set the
  * currentPlayer is left as-is (no further turns exist).
+ *
+ * Precondition: state must have at least one piece on the board — otherwise
+ * `alive` is empty and the rotation loop below cannot terminate. Unreachable
+ * via applyIntent, which always resolves a winner before pieces run out.
  */
 export function advanceTurn(state: GameState): GameState {
   const alive = playersWithPieces(state)

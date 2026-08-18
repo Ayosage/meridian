@@ -88,6 +88,10 @@ describe('reconnection', () => {
     expect(result).toEqual({ reason: 'forfeit', winner: 0 })
     expect(room.state.phase).toBe('ended')
     expect(room.state.winner).toBe(0)
+    // The plain authoritative state (what a reconnect-in-grace SNAPSHOT
+    // would send) must agree with the schema, not just the broadcast.
+    const roomInternals = room as unknown as { game: { winner: number | null } | null }
+    expect(roomInternals.game?.winner).toBe(0)
   })
 
   it('a consented leave mid-match forfeits immediately', async () => {
