@@ -33,7 +33,7 @@ The server never sends `CatanState` itself (the reconnect path included).
 Shape of `CatanClientState`:
 
 - **Public pass-through:** `seq`, `playerCount`, `board`, `buildings`,
-  `roads`, `bank`, `awards`, `winner`, `forfeited`, and `turn` — including
+  `roads`, `bank`, `awards`, `winner`, and `turn` — including
   dice, phase, the open trade offer and its responses, and pending
   discards as **counts owed** (`Record<seat, number>`, already
   composition-free in the engine).
@@ -52,48 +52,53 @@ Steal/monopoly/discard privacy needs no special events: each seat sees its
 own snapshot change (the robber's thief learns the stolen card because
 their own hand grew; everyone else sees totals move).
 
-## 3. Engine extension: `forfeit`
+## 3. Seat pilot: a caretaker bot drives absent seats (user decision, 2026-08-19)
 
-The pivot spec's leave policy ("assets stay, turns skip them") cannot be
-implemented by the server synthesizing intents — a departed player's turn
-can require roll → 7 → discard → robber → steal. Instead, one engine
-extension, exhaustively unit-testable:
+**Supersedes the passive-forfeit engine extension considered first.** The
+leave policy: the moment a seat has no connected human, a server-side BOT
+pilots it so the game never stalls; the human reclaims the seat by
+reconnecting, any time until the game ends. The engine needs NO changes —
+every seat always has a driver, so rotation, discards, robber flows, and
+production all work exactly as already implemented and tested.
 
-- `CatanState` gains `forfeited: readonly PlayerId[]` (empty at create).
-- New intent `{ type: 'forfeit'; player: PlayerId }`, applied ONLY by the
-  server (never exposed in the client protocol). Legal in any phase, for
-  any player still active, including during setup.
-- Reducer semantics:
-  - **Turn rotation** (endTurn and the setup snake draft) skips forfeited
-    players. If the CURRENT player forfeits, their turn ends immediately
-    (any half-finished sub-flow they owned — robber placement, open trade
-    — is cancelled) and play advances to the next active player.
-  - **Production:** forfeited players' buildings are INERT — they collect
-    nothing. (Deviation from the in-session presentation, recorded here:
-    letting departed players collect would consume bank stock and could
-    trigger the bank-shortage rule against active players.)
-  - **Discard-on-7:** forfeited players are excluded; any outstanding
-    discard owed by the forfeiting player is dropped, and the discard
-    phase resolves if they were the last holdout.
-  - **Trades:** forfeited players are auto-reject; an open offer FROM a
-    player who then forfeits is cancelled.
-  - **Awards/VP:** kept as held (assets stay); a forfeited player cannot
-    win, but their longest-road/largest-army holdings persist per the
-    ties-keep-holder rule.
-  - **Game end:** if fewer than 2 active players remain, the game ends;
-    with exactly one active player remaining, that player wins
-    (`winner = last active`).
+New server module `apps/server/src/pilot.ts`:
+
+```ts
+pilotIntent(state: CatanState, seat: PlayerId, rng: Rng): CatanIntent | null
+```
+
+- **Caretaker policy — mandatory actions only.** The bot: rolls the dice;
+  discards on 7 with DETERMINISTIC GREEDY selection (shed from the largest
+  resource piles first, ties broken in fixed resource order); moves the
+  robber to a legal hex (preferring hexes touching no building, else any
+  legal hex) and steals from an rng-chosen adjacent player when the rules
+  force a target; completes the setup draft (rng-chosen legal vertex +
+  adjacent edge) if a player is absent during setup; answers any open
+  trade offer with REJECT immediately; ends its turn. It NEVER builds,
+  buys or plays dev cards, or offers trades — a piloted seat cannot win
+  the game for its owner or reshape the board.
+- **Returns `null`** when the seat has nothing mandatory to do (not its
+  turn, no discard owed, no trade to answer) — the room invokes the pilot
+  only when the game is waiting on that seat.
+- **Pacing:** the room schedules pilot actions with a configurable delay
+  (`pilotDelayMs`, default ~600ms; 0 in tests) so remaining humans see the
+  flow rather than an instant cascade.
+- **Liveness property (the failure mode that matters):** for any reachable
+  state where the game is waiting on the piloted seat, `pilotIntent`
+  returns an intent the engine accepts. Property-tested (§6).
 
 ## 4. `CatanRoom` (apps/server/src/rooms/CatanRoom.ts)
 
 - **Create options:** `{ players: 3 | 4; layout?: 'beginner' | 'random';
-  graceSeconds?: number; seed?: number }` (seed injectable for tests;
-  cryptographically-random default). Random layout is the default per the
-  pivot spec. Join codes via the existing `generateRoomId` presence
-  machinery.
+  pilotDelayMs?: number; abandonMinutes?: number; seed?: number }` (seed
+  injectable for tests; cryptographically-random default). Random layout
+  is the default per the pivot spec. Join codes via the existing
+  `generateRoomId` presence machinery.
 - **Lobby schema** (Colyseus schema, lobby plumbing ONLY): seat list,
-  room phase (`waiting | playing | ended`), target player count. Game
-  state never enters schema.
+  room phase (`waiting | playing | ended`), target player count, and a
+  per-seat `connected` flag (so clients can render "away — autopilot" in
+  phase 4). Presence is transport metadata, not game state; game state
+  never enters schema.
 - **Seats & host:** join order = seat number; seat 0 is host. Room starts
   automatically when full. In a 4-room with exactly 3 seated, the host may
   send `MSG.START` to begin (3-player game; the 4th seat closes).
@@ -101,25 +106,36 @@ extension, exhaustively unit-testable:
   `applyCatanIntent(state, intent, rng)` → on success, send each CONNECTED
   seat its own `MSG.SNAPSHOT` carrying `redactCatanState(state, seat)`;
   on `CatanRuleError`, reply `MSG.RULE_ERROR` to the sender only.
-- **Reconnection:** `allowReconnection(client, graceSeconds)` (the proven
-  MatchRoom pattern, including `afterNextPatch` ordering); the rejoiner
-  receives their current redacted snapshot. Same sessionId = same seat.
-- **Leaving:** consented leave mid-game, or grace expiry → server applies
-  `{ type: 'forfeit', player: seat }` and broadcasts per-seat snapshots
-  (plus `MSG.MATCH_ENDED` if the forfeit ended the game). Pre-start leaves
-  free the seat (existing waiting-phase pattern).
+- **Disconnect → pilot takes over immediately.** Any leave mid-game
+  (dropped connection OR consented leave) puts the seat under the §3
+  pilot with no stall — the pilot acts whenever the game is waiting on
+  that seat. Pre-start leaves free the seat (existing waiting-phase
+  pattern).
+- **Reconnect → seat handed back.** `allowReconnection(client, 'manual')`
+  holds every departed seat reclaimable until the game ends or the room
+  is abandoned (no grace deadline — the pilot removes the need for one).
+  On reclaim the pilot stands down between intents (the room serializes
+  intent application, so there is no mid-action race) and the rejoiner
+  receives their current redacted snapshot via the proven
+  `afterNextPatch` pattern. Same sessionId = same seat.
+- **Abandonment guard:** if ZERO humans are connected, the pilots pause
+  (no bot-vs-bot games playing themselves out); after `abandonMinutes`
+  (default 10) with no human, the room disposes and its join code is
+  released.
 - **Win:** after any applied intent with `winner !== null`, broadcast
   `MSG.MATCH_ENDED { reason: 'win', winner }` after the final snapshots.
+  A piloted seat can hold buildings/awards but cannot reach 10 VP while
+  piloted (the pilot never builds or buys), so a bot cannot end the game.
 
 ## 5. Protocol (`@meridian/protocol`)
 
 - `catanIntentSchema`: strict zod discriminated union mirroring the 17
-  engine intents MINUS the `player` field (server derives seat). `forfeit`
-  is deliberately absent. Vertex/edge ids validated as bounded non-empty
-  strings; hex coords as strict `{q, r}` ints; resource maps as strict
-  partial records of the five resources with positive-int values. The
-  ENGINE remains the authority on legality — protocol only rejects
-  malformed shapes.
+  engine intents MINUS the `player` field (server derives seat). Vertex/
+  edge ids validated as bounded non-empty strings; hex coords as strict
+  `{q, r}` ints; resource maps as strict partial records of the five
+  resources with positive-int values. The ENGINE remains the authority on
+  legality — protocol only rejects malformed shapes. The pilot is
+  server-internal and has no protocol surface.
 - `MSG.START` added (lobby, host-only, no payload).
 - `catanSnapshotPayloadSchema`: `{ seq: number, view: CatanClientState }`
   — typed so the phase-4 client consumes it directly.
@@ -137,23 +153,31 @@ extension, exhaustively unit-testable:
   (`full-game.test.ts` harness); at EVERY step, for EVERY seat, assert the
   view's structural invariants and that `JSON.stringify(view)` contains no
   `devDeck` array and no other seat's `devCards`.
-- `forfeit.test.ts` matrix: rotation skip (mid-turn and between turns),
-  setup-draft skip, current-player forfeit cancels robber/trade sub-flows,
-  discard exclusion incl. last-holdout resolution, trade auto-reject,
-  production inertness (incl. a bank-shortage case that would differ if
-  the forfeited player still collected), cannot-win, last-active-wins,
-  award retention.
+**apps/server unit (pilot.ts, engine-only — no ws):**
+- Policy tests: greedy discard selection order; robber preference (empty
+  hex first) and forced steal; setup-draft placement legality; trade
+  auto-reject; `null` when nothing is mandatory; never emits build/buy/
+  play/offer intents.
+- Liveness property test: seeded random-walk games where one or more
+  seats are pilot-driven at every decision point — assert the pilot's
+  intent is always accepted by `applyCatanIntent` and every game reaches
+  a terminal state or a human-decision point (no stalls).
 
-**apps/server (@colyseus/testing, serialized like the existing suite):**
+**apps/server integration (@colyseus/testing, serialized like the
+existing suite):**
 - Scripted full 3-player and 4-player matches over real ws to a 10-VP win,
   exercising setup draft, production, 7-discard-robber-steal, player and
   bank/port trades, every dev card, and awards.
 - Host-start-at-3 in a 4-room; non-host `START` rejected; auto-start when
   full.
-- Mid-match reconnect: rejoiner's snapshot is correct and redacted for
-  their seat.
-- Grace-expiry forfeit: turns skip the departed seat; assets remain on the
-  board; game continues to a win.
+- Pilot takeover: a client drops mid-turn (and once mid-setup, once while
+  owing a discard, once holding an open robber decision) → the pilot
+  completes the mandatory flow and the game continues.
+- Seat reclaim: the human reconnects several turns later → pilot stands
+  down, rejoiner's snapshot is correct and redacted for their seat, and
+  their subsequent intents apply.
+- Abandonment: all humans disconnect → pilots pause; after
+  `abandonMinutes` the room disposes and the join code is released.
 - Cross-seat leak assertion: every snapshot every client receives during
   the scripted matches passes the same structural no-leak checks keyed to
   that client's seat.
@@ -166,6 +190,9 @@ extension, exhaustively unit-testable:
 - Spectators, 5-6 players, ranked/matchmaking (out of v1 entirely).
 - Event-stream messages for juice (phase 5 may add them; snapshots are
   sufficient for correctness).
+- A COMPETENT bot (building, trading, strategy). The pilot is a caretaker
+  by design; promoting it to a real AI opponent is a separate future
+  project with its own design questions.
 
 ## 8. Risks
 
@@ -174,9 +201,16 @@ extension, exhaustively unit-testable:
   redactor constructs the view EXPLICITLY field-by-field (never spreads
   `state` or `players[i]`), so a new secret field fails closed; the
   structural key-set tests then catch any accidental widening.
-- **Forfeit edge cases** (forfeit during own robber placement, during
-  setup, as last holdout of a discard) are the likeliest bug nest — the
-  §6 matrix enumerates them ahead of implementation.
+- **Pilot stalls are the failure mode that matters:** a piloted seat that
+  can't produce a legal intent wedges the whole match. The §6 liveness
+  property test attacks this directly; the pilot's policy is also kept
+  deliberately minimal so its decision surface stays enumerable.
+- **Takeover/reclaim races:** the room serializes intent application and
+  hands seats over only between intents; the reclaim integration tests
+  cover drop/rejoin at awkward moments (mid-setup, owing a discard,
+  holding the robber).
 - **rng stream alignment:** dice, deck shuffle, and steals share the
-  injected rng; server tests use a fixed seed so full-match scripts are
-  reproducible (same discipline as the engine's full-game tests).
+  injected rng; the pilot's rng-based choices (steal target, setup vertex)
+  draw from the same server stream, and server tests use a fixed seed so
+  full-match scripts are reproducible (same discipline as the engine's
+  full-game tests). The greedy discard is deliberately rng-free.
