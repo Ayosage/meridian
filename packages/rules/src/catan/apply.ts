@@ -14,6 +14,7 @@ import {
   applyRespondTrade,
 } from './trade'
 import type { Rng } from './rng'
+import { checkWin } from './score'
 import type { CatanState } from './state'
 import { standardTopology } from './topology'
 import { addResources, TERRAIN_RESOURCE, type Resource } from './types'
@@ -31,7 +32,7 @@ export function applyCatanIntent(
     return err('GAME_OVER', 'the match is already decided')
   const result = dispatch(state, intent, rng)
   if (isRuleError(result)) return result
-  return { ...result, seq: state.seq + 1 }
+  return checkWin({ ...result, seq: state.seq + 1 })
 }
 
 function dispatch(state: CatanState, intent: CatanIntent, rng: Rng): CatanState | CatanRuleError {

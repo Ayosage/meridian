@@ -3,6 +3,7 @@ import { COSTS } from './data'
 import { catanError as err, type CatanIntent, type CatanRuleError } from './intent'
 import { updateLongestRoad } from './longest-road'
 import { legalRoadEdges } from './queries'
+import { updateLargestArmy } from './score'
 import type { CatanState } from './state'
 import {
   addResources,
@@ -59,11 +60,14 @@ export function applyPlayDevCard(state: CatanState, intent: PlayIntent): CatanSt
       const players = spent.players.map((p, i) =>
         i === intent.player ? { ...p, knightsPlayed: p.knightsPlayed + 1 } : p,
       )
-      return {
-        ...spent,
-        players,
-        turn: { ...spent.turn, phase: 'robber', robberReturn: phase as 'preRoll' | 'main' },
-      }
+      return updateLargestArmy(
+        {
+          ...spent,
+          players,
+          turn: { ...spent.turn, phase: 'robber', robberReturn: phase as 'preRoll' | 'main' },
+        },
+        intent.player,
+      )
     }
     case 'roadBuilding': {
       if (me.roadsLeft === 0) return err('NO_STOCK', 'no road pieces left')
