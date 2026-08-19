@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { CatanClientState } from '@meridian/rules'
 
 /** Message-type names shared by client and server. */
 export const MSG = {
@@ -6,6 +7,8 @@ export const MSG = {
   RULE_ERROR: 'ruleError',
   SNAPSHOT: 'snapshot',
   MATCH_ENDED: 'matchEnded',
+  /** Lobby: host starts a 4-room early at 3 seated players (no payload). */
+  START: 'start',
 } as const
 
 const coordSchema = z.object({ q: z.number().int(), r: z.number().int() }).strict()
@@ -31,3 +34,89 @@ export const matchEndedPayloadSchema = z.object({
   winner: z.number().int().nonnegative(),
 })
 export type MatchEndedPayload = z.infer<typeof matchEndedPayloadSchema>
+
+// ---------------------------------------------------------------------------
+// Catan (phase 3)
+
+const resourceNames = ['wood', 'brick', 'sheep', 'wheat', 'ore'] as const
+const resourceSchema = z.enum(resourceNames)
+/** Strict partial resource map; positive integer counts only. */
+const resourceMapSchema = z
+  .object(
+    Object.fromEntries(
+      resourceNames.map((r) => [r, z.number().int().positive().optional()]),
+    ) as Record<(typeof resourceNames)[number], z.ZodOptional<z.ZodNumber>>,
+  )
+  .strict()
+
+const boardId = z.string().min(1).max(64)
+const seatSchema = z.number().int().nonnegative().max(3)
+
+/**
+ * Client -> server Catan intents. NO player field — the server derives the
+ * seat from the connection. Strict: unknown keys are rejected. The engine
+ * remains the authority on legality; this only rejects malformed shapes.
+ */
+const playDevCardSchema = z.discriminatedUnion('card', [
+  z.object({ type: z.literal('playDevCard'), card: z.literal('knight') }).strict(),
+  z
+    .object({
+      type: z.literal('playDevCard'),
+      card: z.literal('roadBuilding'),
+      // the engine allows 1 edge when only 1 road remains in stock
+      edges: z.array(boardId).min(1).max(2),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('playDevCard'),
+      card: z.literal('yearOfPlenty'),
+      take: z.tuple([resourceSchema, resourceSchema]),
+    })
+    .strict(),
+  z
+    .object({ type: z.literal('playDevCard'), card: z.literal('monopoly'), resource: resourceSchema })
+    .strict(),
+])
+
+const catanIntentWithoutDevSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('placeSetupSettlement'), vertex: boardId }).strict(),
+  z.object({ type: z.literal('placeSetupRoad'), edge: boardId }).strict(),
+  z.object({ type: z.literal('rollDice') }).strict(),
+  z.object({ type: z.literal('discard'), resources: resourceMapSchema }).strict(),
+  z
+    .object({ type: z.literal('moveRobber'), hex: coordSchema, stealFrom: seatSchema.nullable() })
+    .strict(),
+  z
+    .object({
+      type: z.literal('build'),
+      piece: z.enum(['road', 'settlement', 'city']),
+      location: boardId,
+    })
+    .strict(),
+  z.object({ type: z.literal('buyDevCard') }).strict(),
+  z.object({ type: z.literal('bankTrade'), give: resourceSchema, get: resourceSchema }).strict(),
+  z.object({ type: z.literal('offerTrade'), give: resourceMapSchema, get: resourceMapSchema }).strict(),
+  z
+    .object({
+      type: z.literal('respondTrade'),
+      response: z.union([
+        z.literal('accept'),
+        z.literal('reject'),
+        z.object({ give: resourceMapSchema, get: resourceMapSchema }).strict(),
+      ]),
+    })
+    .strict(),
+  z.object({ type: z.literal('confirmTrade'), partner: seatSchema }).strict(),
+  z.object({ type: z.literal('cancelTrade') }).strict(),
+  z.object({ type: z.literal('endTurn') }).strict(),
+])
+
+export const catanIntentSchema = z.union([catanIntentWithoutDevSchema, playDevCardSchema])
+export type CatanClientIntent = z.infer<typeof catanIntentSchema>
+
+/** Server -> client per-seat snapshot (server design spec §2/§5). */
+export interface CatanSnapshotPayload {
+  seq: number
+  view: CatanClientState
+}

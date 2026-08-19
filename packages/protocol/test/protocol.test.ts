@@ -66,6 +66,7 @@ describe('server payload schemas', () => {
       RULE_ERROR: 'ruleError',
       SNAPSHOT: 'snapshot',
       MATCH_ENDED: 'matchEnded',
+      START: 'start',
     })
   })
 })
