@@ -182,22 +182,25 @@ export class CatanRoom extends Room<CatanLobbyState> {
     this.schedulePilot()
     if (this.humansConnected() === 0) this.startAbandonTimer()
 
-    try {
-      // reclaimable until game end or abandonment disposal (spec §4)
-      const rejoined = await this.allowReconnection(client, 'manual')
-      this.seatClients[seat] = rejoined
-      this.state.connected[seat] = true
-      this.stopAbandonTimer()
-      if (this.game)
-        rejoined.send(
-          MSG.SNAPSHOT,
-          { seq: this.game.seq, view: redactCatanState(this.game, seat) },
-          { afterNextPatch: true },
-        )
-      this.schedulePilot()
-    } catch {
-      // reconnection cancelled (room disposing) — nothing to do
-    }
+    // Reclaimable until game end or abandonment disposal (spec §4).
+    // Deliberately NOT awaited: onLeave must return so the transport closes
+    // (client.leave() blocks on it); the deferred resolves on reconnect.
+    this.allowReconnection(client, 'manual')
+      .then((rejoined) => {
+        this.seatClients[seat] = rejoined
+        this.state.connected[seat] = true
+        this.stopAbandonTimer()
+        if (this.game)
+          rejoined.send(
+            MSG.SNAPSHOT,
+            { seq: this.game.seq, view: redactCatanState(this.game, seat) },
+            { afterNextPatch: true },
+          )
+        this.schedulePilot()
+      })
+      .catch(() => {
+        // reconnection cancelled (room disposing) — nothing to do
+      })
   }
 
   private startAbandonTimer() {
