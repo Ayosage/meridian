@@ -98,9 +98,7 @@ export function BoardPreview() {
     <>
       <CatanScene view={view} />
       <ModeSwitcher />
-      <div style={{ position: 'fixed', bottom: 16, left: 16, zIndex: 10 }}>
-        <BuildBar />
-      </div>
+      <BuildBar />
     </>
   )
 }

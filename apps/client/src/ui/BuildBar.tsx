@@ -1,5 +1,9 @@
 import { COSTS, hasResources } from '@meridian/rules'
 import { useCatanStore } from '../scene/catan/catanStore'
+// Only App.tsx imports hud.css today; BuildBar also mounts standalone on the
+// /board dev route (BoardPreview), so it owns its own stylesheet dependency
+// rather than relying on whichever entry point happens to import it first.
+import './hud.css'
 
 const PIECES = [
   { kind: 'placeRoad' as const, cost: 'road' as const, label: 'Road', testId: 'build-road' },

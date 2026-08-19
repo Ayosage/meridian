@@ -79,3 +79,25 @@
 .lobby .dot { width: 9px; height: 9px; border-radius: 50%; background: #555; }
 .lobby .dot.connected { background: #4caf50; }
 .lobby .dot.disconnected { background: #7a2f2f; }
+.build-bar {
+  position: fixed;
+  bottom: 18px;
+  left: 18px;
+  display: flex;
+  gap: 8px;
+  background: rgba(12, 14, 20, 0.8);
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.build-bar-btn {
+  padding: 10px 16px;
+  font-size: 14px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: #20222b;
+  color: #e8e8f0;
+  cursor: pointer;
+}
+.build-bar-btn.active { background: #2c6e8f; border-color: #7fc8e8; color: #fff; }
+.build-bar-btn:disabled { opacity: 0.4; cursor: default; }
