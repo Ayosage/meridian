@@ -45,11 +45,11 @@ player tint); token numerals (580 tris each) are merge/decimate candidates.
 
 ## Full board — 19 Catan tiles + demo pieces, /board route (2026-08-19)
 
-| Metric | Budget | Measured |
-|---|---|---|
-| Draw calls | ~250 | **1049** |
-| Triangles | — | 257,293 |
-| FPS (rAF counter, 2s) | 60 | ~60 (rAF/vsync-capped; not a reliable GPU-bound signal at dpr 1) |
+| Metric | Budget | Before instancing | After instancing |
+|---|---|---|---|
+| Draw calls | ~250 (target ≤300 for the fix) | 1049 | **287** |
+| Triangles | — | 257,293 | 257,293 (unchanged — same geometry, fewer draw calls) |
+| FPS (rAF counter, 2s) | 60 | ~60 | ~60 (both rAF/vsync-capped; not a reliable GPU-bound signal at dpr 1) |
 
 Method: `window.__meridianDebug.catanRenderInfo()` (dev-only hook on
 `CatanScene`, mirroring the `renderInfo()` idiom in `dev/debugHooks.tsx`) +
@@ -61,11 +61,40 @@ start of each frame (lowest `useFrame` priority) to read the whole frame's
 total — by default it only reflects the postprocessing composer's last
 internal `renderer.render()` call (the 1-triangle fullscreen blit).
 
-**Concern, not fixed in this task:** 1049 draw calls is ~4x the ~250
-budget flagged in the task brief. The scatter/pattern terrains are the
-cause, unbatched: pasture is 84 nodes/tile × 4 tiles = 336 draw calls,
-forest is 15 nodes/tile × 4 tiles = 60, before tokens/buildings/roads/ports
-are counted. Per explicit dispatch instructions this task does NOT
-implement the instancing fallback (merge pines/tufts/clumps into one
-`InstancedMesh` per variant, built once from the GLB geometry at mount) —
-that's flagged for a follow-up task/decision.
+**Root cause (1049 draw calls):** the scatter/pattern terrains, unbatched —
+pasture is 84 nodes/tile × 4 tiles = 336 draw calls, forest is 15
+nodes/tile × 4 tiles = 60, and every shadow-casting mesh is drawn a
+*second* time into the sun's shadow map, roughly doubling those totals
+(pasture ≈672, forest ≈120 combined main+shadow) — together over 80% of
+the pre-fix total.
+
+**Fix (fix round 1):** `scene/catan/CatanBoard.tsx` now batches forest
+pines (3 geometry variants: `pine_a/b/c`) and pasture grass clumps (1
+variant) + sheep (3 variants) into per-variant `InstancedMesh`es spanning
+every tile of that terrain, instead of one clone per node per tile.
+`ScatterInstances` reads each source GLB once (`collectVariants`: groups
+repeated nodes by shared `BufferGeometry` reference, keeping each node's
+local-to-tile `matrixWorld`), then `InstancedVariant` composes
+`translate(tileWorldPos) * localMatrix` per (tile × node) pair and writes
+all instance matrices once on mount (`instanceMatrix.needsUpdate` set
+once — the board is static after mount, no per-frame writes). Because
+instancing is a single GPU draw call regardless of instance count, this
+collapses both the main pass *and* the shadow pass to 1 draw call per
+variant. Ground meshes (`forest_ground`/`pasture_ground`) still clone
+per-tile as before — only the two terrains with real repeat-count are
+touched; hills' 7 unique sculpt meshes, fields' pre-joined `fields_tufts`,
+and desert's 6 tufts (only 1 desert tile — not worth it) are unchanged.
+Verified via Playwright screenshot at the same camera pose: pixel-identical
+to the pre-fix render, and the unchanged triangle count (257,293 in both)
+confirms no geometry was added, removed, or moved — only draw-call count
+changed.
+
+Deferred (ledgered, not required for this round): tint-material dispose on
+upgrade (`Pieces.tsx`'s `cloneTinted` clones a material per piece but never
+disposes the previous one if a building is re-tinted, e.g. settlement →
+city upgrade re-mounting with a new source — a minor GPU-memory leak, not
+a draw-call issue); water material `useMemo` identity (`CatanScene.tsx`'s
+`Water` recreates the whole shader material if `view.board.hexes`'
+reference changes, even when the actual hex set didn't — fine for a
+static board, worth revisiting once the store can produce new view objects
+mid-match).
