@@ -4,6 +4,7 @@ import { catanError as err, type CatanIntent, type CatanRuleError } from './inte
 import { settlementDistanceOk } from './placement'
 import { applyRoll } from './production'
 import { applyBuild } from './build'
+import { applyBuyDevCard, applyPlayDevCard } from './dev-cards'
 import { applyDiscard, applyMoveRobber } from './robber'
 import {
   applyBankTrade,
@@ -62,8 +63,10 @@ function dispatch(state: CatanState, intent: CatanIntent, rng: Rng): CatanState 
       return applyConfirmTrade(state, intent)
     case 'cancelTrade':
       return applyCancelTrade(state, intent)
-    default:
-      return err('BAD_INTENT', 'not implemented yet') // replaced task by task (6-11)
+    case 'buyDevCard':
+      return applyBuyDevCard(state, intent)
+    case 'playDevCard':
+      return applyPlayDevCard(state, intent)
   }
 }
 
