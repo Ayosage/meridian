@@ -38,7 +38,13 @@ class FakeRoom {
   }
 }
 
-const fake = { room: new FakeRoom(), createCalls: 0, joinCalls: [] as string[], reconnectCalls: [] as string[] }
+const fake = {
+  room: new FakeRoom(),
+  createCalls: 0,
+  joinCalls: [] as string[],
+  reconnectCalls: [] as string[],
+  reconnectShouldFail: false,
+}
 
 vi.mock('colyseus.js', () => ({
   Client: class {
@@ -52,6 +58,7 @@ vi.mock('colyseus.js', () => ({
     }
     reconnect(token: string) {
       fake.reconnectCalls.push(token)
+      if (fake.reconnectShouldFail) return Promise.reject(new Error('reconnect failed'))
       return Promise.resolve(fake.room)
     }
   },
@@ -59,7 +66,7 @@ vi.mock('colyseus.js', () => ({
 
 import { useMeridianStore } from '../src/store'
 import { tokenStorage } from '../src/net/tokenStorage'
-import { createMatch, joinMatch, sendIntent } from '../src/net/connection'
+import { createMatch, joinMatch, reconnectMatch, sendIntent } from '../src/net/connection'
 
 function schemaOf(seats: string[], gameSeq = 0, phase = 'playing') {
   const gs = initialState(placeholderRuleset)
@@ -83,6 +90,7 @@ beforeEach(() => {
   fake.createCalls = 0
   fake.joinCalls = []
   fake.reconnectCalls = []
+  fake.reconnectShouldFail = false
 })
 
 describe('connection wiring', () => {
@@ -138,5 +146,16 @@ describe('connection wiring', () => {
     await createMatch()
     sendIntent({ type: 'endTurn' })
     expect(fake.room.sent).toEqual([{ type: 'intent', payload: { type: 'endTurn' } }])
+  })
+
+  it('reconnectMatch falls back to idle status when the reconnect attempt fails', async () => {
+    tokenStorage.set('stale-token')
+    fake.reconnectShouldFail = true
+
+    const ok = await reconnectMatch()
+
+    expect(ok).toBe(false)
+    expect(tokenStorage.get()).toBeNull()
+    expect(useMeridianStore.getState().status).toBe('idle')
   })
 })

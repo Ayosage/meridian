@@ -40,6 +40,7 @@ export async function reconnectMatch(): Promise<boolean> {
     return true
   } catch {
     tokenStorage.clear()
+    useMeridianStore.getState().setStatus('idle')
     return false
   }
 }
