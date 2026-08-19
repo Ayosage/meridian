@@ -19,6 +19,9 @@ EXPORTS = {
     "piece_settlement": ("settlement", 6.0, ()),
     "piece_road": ("road", 7.2, ()),
     "piece_token": ("token", 8.0, ()),
+    "terrain_pasture": ("terrain_pasture", 10.0, ()),
+    "terrain_hills": ("terrain_hills", 12.0, ()),
+    "terrain_desert": ("terrain_desert", 14.0, ()),
 }
 
 for coll_name, (glb, xoff, excludes) in EXPORTS.items():
