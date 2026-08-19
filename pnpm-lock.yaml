@@ -112,13 +112,13 @@ importers:
 
   packages/protocol:
     dependencies:
+      '@meridian/rules':
+        specifier: workspace:*
+        version: link:../rules
       zod:
         specifier: ^3.23.0
         version: 3.25.76
     devDependencies:
-      '@meridian/rules':
-        specifier: workspace:*
-        version: link:../rules
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
