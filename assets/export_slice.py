@@ -25,6 +25,10 @@ EXPORTS = {
     "piece_city": ("city", 16.0, ()),
     "piece_robber": ("robber", 17.0, ()),
     "piece_port": ("port", 18.0, ()),
+    # tokens are parked in a grid around x=20; only the collection offset is
+    # removed — per-token grid offsets stay in node transforms, and the CLIENT
+    # clones each token_<n> MESH by name, ignoring the node transform.
+    "piece_tokens": ("tokens", 20.0, ()),
 }
 
 for coll_name, (glb, xoff, excludes) in EXPORTS.items():
