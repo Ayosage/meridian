@@ -162,3 +162,89 @@
   cursor: pointer;
 }
 .steal-victim-btn:hover { background: #2c6e8f; }
+.catan-hud .turn-banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(12, 14, 20, 0.8);
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.autopilot-badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #6b5b1f;
+  color: #f4d97a;
+}
+.catan-hud .dice-display {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  background: rgba(12, 14, 20, 0.8);
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.catan-hud .roll-button {
+  position: absolute;
+  bottom: 18px;
+  right: 120px;
+  padding: 10px 18px;
+  font-size: 15px;
+  border: 0;
+  border-radius: 8px;
+  background: #4a8f5c;
+  color: #fff;
+  cursor: pointer;
+}
+.catan-hud .roll-button:disabled { opacity: 0.4; cursor: default; }
+.catan-hud .hand-strip {
+  /* Sits above .build-bar (also bottom:18px/left:18px) so the two never overlap. */
+  position: absolute;
+  bottom: 74px;
+  left: 18px;
+  display: flex;
+  gap: 6px;
+  background: rgba(12, 14, 20, 0.8);
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+.hand-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 3.5em;
+  font-size: 12px;
+}
+.hand-count .hand-label { text-transform: capitalize; opacity: 0.75; }
+.hand-count .hand-value { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.catan-hud .opponent-strip {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.opponent-card {
+  background: rgba(12, 14, 20, 0.8);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  min-width: 160px;
+}
+.opponent-name { font-weight: 700; display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.opponent-stats { display: flex; gap: 8px; opacity: 0.85; font-variant-numeric: tabular-nums; }
+.win-overlay .win-vp-cards { text-align: center; font-size: 13px; opacity: 0.85; }

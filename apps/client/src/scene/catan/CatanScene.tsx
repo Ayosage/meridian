@@ -1,9 +1,9 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Bloom, EffectComposer, N8AO, Vignette } from '@react-three/postprocessing'
 import * as THREE from 'three'
-import type { CatanClientState } from '@meridian/rules'
+import type { CatanBoard as CatanBoardData, CatanClientState } from '@meridian/rules'
 import { coordToWorld } from '../layout'
 import { CatanBoard } from './CatanBoard'
 import { Highlights } from './Highlights'
@@ -21,14 +21,24 @@ import { GoldenHourRig, SkyBackdrop } from './rig'
 const WATER_Y = 0.05
 const WATER_SIZE = 28
 
-function Water({ view }: { view: CatanClientState }) {
+/**
+ * Takes `hexes` directly (not `view`) so its identity is decoupled from the
+ * live snapshot: the store replaces `view` wholesale on every server push
+ * (see catanStore.ingestSnapshot), and while the board layout itself never
+ * changes mid-match (only `board.robber` does — see robber.ts), relying on
+ * `view.board.hexes`' reference staying stable across every future state
+ * transition would be fragile. CatanScene instead pins the hexes array once
+ * (see boardHexesRef below) and passes that fixed reference here, so this
+ * ShaderMaterial is built exactly once per match, never recompiled.
+ */
+function Water({ hexes }: { hexes: CatanBoardData['hexes'] }) {
   const mat = useMemo(() => {
-    const centers = view.board.hexes.map((hex) => {
+    const centers = hexes.map((hex) => {
       const [x, , z] = coordToWorld(hex.coord)
       return new THREE.Vector2(x, z)
     })
     return createWaterMaterial(centers)
-  }, [view.board.hexes])
+  }, [hexes])
   useFrame((_, dt) => {
     const t = mat.uniforms['uTime']
     if (t) t.value += dt
@@ -79,6 +89,9 @@ function CatanDebugHooks() {
 }
 
 export function CatanScene({ view }: { view: CatanClientState }) {
+  // Pinned once on mount; see the Water doc comment above for why.
+  const boardHexesRef = useRef(view.board.hexes)
+
   return (
     <Canvas
       shadows
@@ -92,7 +105,7 @@ export function CatanScene({ view }: { view: CatanClientState }) {
       <Pieces view={view} />
       <PickLayer view={view} />
       <Highlights view={view} />
-      <Water view={view} />
+      <Water hexes={boardHexesRef.current} />
       <OrbitControls
         target={[0, 0, 0]}
         enablePan={false}

@@ -1,45 +1,39 @@
 import { useEffect } from 'react'
-import { Canvas } from '@react-three/fiber'
-import { MatchScene } from './scene/MatchScene'
+import { CatanScene } from './scene/catan/CatanScene'
+import { useCatanStore } from './scene/catan/catanStore'
 import { Lobby } from './ui/Lobby'
-import { Hud } from './ui/Hud'
-import { clickPiece, clickTile } from './interaction'
-import { reconnectMatch } from './net/connection'
-import { useMeridianStore } from './store'
-import { DebugHooks } from './dev/debugHooks'
+import { WaitingRoom } from './ui/WaitingRoom'
+import { BuildBar } from './ui/BuildBar'
+import { DiscardModal } from './ui/DiscardModal'
+import { StealChooser } from './ui/StealChooser'
+import { CatanHud } from './ui/CatanHud'
+import { reconnectCatan } from './net/catan'
 import './ui/hud.css'
 
 export function App() {
-  const status = useMeridianStore((s) => s.status)
-  const game = useMeridianStore((s) => s.game)
-  const selectedPieceId = useMeridianStore((s) => s.selectedPieceId)
-  const legalTargets = useMeridianStore((s) => s.legalTargets)
+  const status = useCatanStore((s) => s.status)
+  const view = useCatanStore((s) => s.view)
 
   useEffect(() => {
-    void reconnectMatch()
+    void reconnectCatan()
   }, [])
 
   if (status === 'idle' || status === 'connecting' || status === 'error') return <Lobby />
+  if (status === 'waiting') return <WaitingRoom />
+
+  // 'playing' / 'reconnecting' / 'ended': once a snapshot has ever arrived
+  // (view !== null), keep rendering the match — 'ended' still needs the
+  // board behind CatanHud's win overlay, and 'reconnecting' keeps the last
+  // known view up rather than flashing back to the lobby.
+  if (view === null) return <Lobby />
 
   return (
     <>
-      <Canvas
-        camera={{ position: [0, 9.5, 8.5], fov: 45 }}
-        onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
-      >
-        <color attach="background" args={['#0d1017']} />
-        {import.meta.env.DEV && <DebugHooks />}
-        {game && (
-          <MatchScene
-            game={game}
-            selectedPieceId={selectedPieceId}
-            legalTargets={legalTargets}
-            onTileClick={clickTile}
-            onPieceClick={clickPiece}
-          />
-        )}
-      </Canvas>
-      <Hud />
+      <CatanScene view={view} />
+      <CatanHud />
+      <BuildBar />
+      <DiscardModal />
+      <StealChooser />
     </>
   )
 }
