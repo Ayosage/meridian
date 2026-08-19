@@ -13,7 +13,7 @@ server and in unit tests headlessly.
 - [ ] `apps/server`: lobby with join codes; two clients join a room, receive initial state; integration test with two ws clients
 - [ ] `apps/server`: authoritative loop — validate intent via rules engine, broadcast resulting state; reject out-of-turn intents; tests
 - [ ] `apps/server`: reconnection — client rejoins with token, receives full state snapshot; test covering drop mid-turn
-- [ ] `apps/client`: R3F board rendering from `GameState` (instanced hex tiles, placeholder piece meshes), zustand store fed by ws messages
-- [ ] `apps/client`: raycast tile/piece selection → intent sending; legal-move highlighting from rules engine
-- [ ] `apps/client`: first custom shader — board surface material (animated, stylized); document shader approach in `docs/SHADERS.md`
-- [ ] Milestone 1 check: two-browser full match E2E script; perf snapshot (draw calls, fps) recorded in `docs/PERF.md`
+- [x] `apps/client`: R3F board rendering from `GameState` (instanced hex tiles, placeholder piece meshes), zustand store fed by ws messages
+- [x] `apps/client`: raycast tile/piece selection → intent sending; legal-move highlighting from rules engine
+- [x] `apps/client`: first custom shader — board surface material (animated, stylized); document shader approach in `docs/SHADERS.md`
+- [x] Milestone 1 check: two-browser full match E2E script; perf snapshot (draw calls, fps) recorded in `docs/PERF.md`

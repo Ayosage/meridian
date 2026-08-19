@@ -6,6 +6,7 @@ import { Hud } from './ui/Hud'
 import { clickPiece, clickTile } from './interaction'
 import { reconnectMatch } from './net/connection'
 import { useMeridianStore } from './store'
+import { DebugHooks } from './dev/debugHooks'
 import './ui/hud.css'
 
 export function App() {
@@ -27,6 +28,7 @@ export function App() {
         onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
       >
         <color attach="background" args={['#0d1017']} />
+        {import.meta.env.DEV && <DebugHooks />}
         {game && (
           <MatchScene
             game={game}

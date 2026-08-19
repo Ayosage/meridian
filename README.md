@@ -16,7 +16,10 @@ Docs: `docs/BRIEF.md` (pillars) · `docs/superpowers/specs/` (designs) ·
 - `packages/protocol` — zod schemas for client↔server messages.
 - `apps/server` — Colyseus authoritative server: 4-letter join codes,
   engine-validated intents, schema diff sync, reconnection with forfeit.
-- `apps/client` — Vite + React Three Fiber (stub; rendering lands next plan).
+- `apps/client` — Vite + React Three Fiber client: lobby with join codes,
+  instanced shader-styled hex board, click-to-move vs the authoritative
+  server. Two-browser E2E: `pnpm --filter client test:e2e` (requires
+  `playwright install chromium`).
 
 ## Development
 

@@ -4,3 +4,6 @@ dist/
 .superpowers/
 .claude/
 *.tsbuildinfo
+test-results/
+playwright-report/
+blob-report/
