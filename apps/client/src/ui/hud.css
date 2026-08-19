@@ -1,0 +1,73 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  color: #e8e8f0;
+}
+.overlay > * { pointer-events: auto; }
+.panel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(12, 14, 20, 0.8);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.panel .code { font-size: 22px; letter-spacing: 0.3em; font-weight: 700; }
+.end-turn {
+  position: absolute;
+  bottom: 18px;
+  right: 18px;
+  padding: 10px 18px;
+  font-size: 15px;
+  border: 0;
+  border-radius: 8px;
+  background: #2c6e8f;
+  color: #fff;
+  cursor: pointer;
+}
+.end-turn:disabled { opacity: 0.4; cursor: default; }
+.toast {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #7a2f2f;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.banner {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(12, 14, 20, 0.9);
+  padding: 20px 40px;
+  border-radius: 12px;
+  font-size: 28px;
+  font-weight: 700;
+}
+.lobby {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: #0d1017;
+  color: #e8e8f0;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.lobby input {
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  font-size: 18px;
+  padding: 8px 12px;
+  width: 8ch;
+  text-align: center;
+}
+.lobby button { padding: 10px 22px; font-size: 15px; cursor: pointer; }
+.lobby .error { color: #ff8080; font-size: 13px; }
