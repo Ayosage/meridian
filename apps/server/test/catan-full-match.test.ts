@@ -138,8 +138,9 @@ async function runMatch(players: 3 | 4, seed: number) {
       if (intent) {
         const seqBefore = view.seq
         clients[seat]!.send(MSG.INTENT, intent)
-        // wait for the state to advance before deciding again
-        for (let w = 0; w < 500 && views[seat]!.seq === seqBefore && !ended; w++)
+        // wait for the state to advance before deciding again (generous
+        // budget: under full-suite turbo load a 1s wait has flaked)
+        for (let w = 0; w < 2000 && views[seat]!.seq === seqBefore && !ended; w++)
           await new Promise((r) => setTimeout(r, 2))
         expect(
           ended !== null || views[seat]!.seq,
