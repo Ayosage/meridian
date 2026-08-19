@@ -3,6 +3,7 @@ import { isRuleError } from '../intent'
 import { catanError as err, type CatanIntent, type CatanRuleError } from './intent'
 import { settlementDistanceOk } from './placement'
 import { applyRoll } from './production'
+import { applyDiscard, applyMoveRobber } from './robber'
 import type { Rng } from './rng'
 import type { CatanState } from './state'
 import { standardTopology } from './topology'
@@ -26,7 +27,7 @@ export function applyCatanIntent(
 
 function dispatch(state: CatanState, intent: CatanIntent, rng: Rng): CatanState | CatanRuleError {
   // intents that are legal off-turn dispatch before the turn guard
-  if (intent.type === 'discard') return err('BAD_INTENT', 'not implemented yet') // Task 7
+  if (intent.type === 'discard') return applyDiscard(state, intent)
   if (intent.type === 'respondTrade') return err('BAD_INTENT', 'not implemented yet') // Task 10
 
   if (intent.player !== state.turn.current)
@@ -41,6 +42,8 @@ function dispatch(state: CatanState, intent: CatanIntent, rng: Rng): CatanState 
       return applyEndTurn(state)
     case 'rollDice':
       return applyRoll(state, rng)
+    case 'moveRobber':
+      return applyMoveRobber(state, intent, rng)
     default:
       return err('BAD_INTENT', 'not implemented yet') // replaced task by task (6-11)
   }
