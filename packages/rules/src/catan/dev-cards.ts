@@ -1,6 +1,7 @@
 import type { PlayerId } from '../state'
 import { COSTS } from './data'
 import { catanError as err, type CatanIntent, type CatanRuleError } from './intent'
+import { updateLongestRoad } from './longest-road'
 import { legalRoadEdges } from './queries'
 import type { CatanState } from './state'
 import {
@@ -81,7 +82,7 @@ export function applyPlayDevCard(state: CatanState, intent: PlayIntent): CatanSt
           ),
         }
       }
-      return next
+      return updateLongestRoad(next)
     }
     case 'yearOfPlenty': {
       const take = toResourceCount(

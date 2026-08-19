@@ -1,6 +1,7 @@
 import type { PlayerId } from '../state'
 import { COSTS } from './data'
 import { catanError as err, type CatanRuleError } from './intent'
+import { updateLongestRoad } from './longest-road'
 import { legalCityVertices, legalRoadEdges, legalSettlementVertices } from './queries'
 import type { CatanPlayer, CatanState } from './state'
 import { addResources, hasResources, subtractResources } from './types'
@@ -24,7 +25,12 @@ export function applyBuild(
     const players = state.players.map((p, i) =>
       i === intent.player ? { ...pay(p), roadsLeft: p.roadsLeft - 1 } : p,
     )
-    return { ...state, players, bank, roads: { ...state.roads, [intent.location]: intent.player } }
+    return updateLongestRoad({
+      ...state,
+      players,
+      bank,
+      roads: { ...state.roads, [intent.location]: intent.player },
+    })
   }
 
   if (intent.piece === 'settlement') {
@@ -34,12 +40,13 @@ export function applyBuild(
     const players = state.players.map((p, i) =>
       i === intent.player ? { ...pay(p), settlementsLeft: p.settlementsLeft - 1 } : p,
     )
-    return {
+    // a new settlement can sever an opponent's longest road
+    return updateLongestRoad({
       ...state,
       players,
       bank,
       buildings: { ...state.buildings, [intent.location]: { owner: intent.player, kind: 'settlement' as const } },
-    }
+    })
   }
 
   // city
