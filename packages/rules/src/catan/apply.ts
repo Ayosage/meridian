@@ -2,6 +2,7 @@ import { coordKey } from '../coord'
 import { isRuleError } from '../intent'
 import { catanError as err, type CatanIntent, type CatanRuleError } from './intent'
 import { settlementDistanceOk } from './placement'
+import { applyRoll } from './production'
 import type { Rng } from './rng'
 import type { CatanState } from './state'
 import { standardTopology } from './topology'
@@ -38,6 +39,8 @@ function dispatch(state: CatanState, intent: CatanIntent, rng: Rng): CatanState 
       return applyPlaceSetupRoad(state, intent.edge)
     case 'endTurn':
       return applyEndTurn(state)
+    case 'rollDice':
+      return applyRoll(state, rng)
     default:
       return err('BAD_INTENT', 'not implemented yet') // replaced task by task (6-11)
   }

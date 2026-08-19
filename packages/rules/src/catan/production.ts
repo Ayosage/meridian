@@ -1,0 +1,83 @@
+import { coordKey } from '../coord'
+import { DISCARD_THRESHOLD } from './data'
+import { catanError as err, type CatanRuleError } from './intent'
+import { rollD6, type Rng } from './rng'
+import type { CatanState } from './state'
+import { standardTopology } from './topology'
+import {
+  addResources,
+  emptyResources,
+  RESOURCES,
+  TERRAIN_RESOURCE,
+  totalResources,
+  type ResourceCount,
+} from './types'
+
+/**
+ * Payout for a non-7 roll. Bank-shortage rule (spec §2): if the bank cannot
+ * cover a resource and MORE THAN ONE player claims it, nobody gets it; a single
+ * claimant takes what remains.
+ */
+export function distributeProduction(state: CatanState, roll: number): CatanState {
+  const topo = standardTopology()
+  const gains: ResourceCount[] = state.players.map(() => emptyResources())
+
+  for (const hex of state.board.hexes) {
+    if (hex.token !== roll) continue
+    const key = coordKey(hex.coord)
+    if (key === state.board.robber) continue
+    const res = TERRAIN_RESOURCE[hex.terrain]
+    if (!res) continue
+    for (const v of topo.hexVertices[key] ?? []) {
+      const b = state.buildings[v]
+      if (b) gains[b.owner]![res] += b.kind === 'city' ? 2 : 1
+    }
+  }
+
+  const bank = { ...state.bank }
+  for (const res of RESOURCES) {
+    const total = gains.reduce((s, g) => s + g[res], 0)
+    if (total === 0) continue
+    if (total > bank[res]) {
+      const claimants = gains.filter((g) => g[res] > 0)
+      if (claimants.length > 1) {
+        for (const g of gains) g[res] = 0
+        continue
+      }
+      claimants[0]![res] = bank[res]
+    }
+    bank[res] -= gains.reduce((s, g) => s + g[res], 0)
+  }
+
+  const players = state.players.map((p, i) => ({ ...p, resources: addResources(p.resources, gains[i]!) }))
+  return { ...state, players, bank }
+}
+
+/** The rollDice intent: roll 2d6, record them, route 7s, pay production. */
+export function applyRoll(state: CatanState, rng: Rng): CatanState | CatanRuleError {
+  if (state.turn.phase !== 'preRoll') return err('BAD_PHASE', 'dice were already rolled this turn')
+  const dice: [number, number] = [rollD6(rng), rollD6(rng)]
+  const roll = dice[0] + dice[1]
+
+  if (roll === 7) {
+    const pendingDiscards: Record<number, number> = {}
+    state.players.forEach((p, i) => {
+      const total = totalResources(p.resources)
+      if (total > DISCARD_THRESHOLD) pendingDiscards[i] = Math.floor(total / 2)
+    })
+    const anyDiscards = Object.keys(pendingDiscards).length > 0
+    return {
+      ...state,
+      turn: {
+        ...state.turn,
+        dice,
+        phase: anyDiscards ? 'discard' : 'robber',
+        pendingDiscards,
+        robberReturn: 'main',
+      },
+    }
+  }
+
+  const produced = distributeProduction(state, roll)
+  return { ...produced, turn: { ...produced.turn, dice, phase: 'main' } }
+}

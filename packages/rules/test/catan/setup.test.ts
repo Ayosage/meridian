@@ -76,6 +76,6 @@ describe('setup draft', () => {
   it('unwired gameplay intents fall through to BAD_INTENT for now', () => {
     // Tasks 6-11 replace these stubs; their own tests then assert BAD_PHASE during setup
     const state = fresh()
-    expectError(state, { type: 'rollDice', player: 0 }, 'BAD_INTENT')
+    expectError(state, { type: 'build', player: 0, piece: 'road', location: SETUP_PLACEMENTS[0]!.edge }, 'BAD_INTENT')
   })
 })
