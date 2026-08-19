@@ -110,6 +110,10 @@ function enterRoom(r: Room<CatanLobbyClientState>): void {
     store().ruleError(`${payload.code}: ${payload.message}`)
   })
   r.onMessage(MSG.MATCH_ENDED, (payload: MatchEndedPayload) => {
+    // A finished match's reconnection token is dead weight: clear it so
+    // getAny() (used on reload to auto-resume) can't pick a stale, ended
+    // room instead of a live one.
+    tokenStorage.clearFor(r.roomId)
     // Catan match-end is always a win (no forfeit path yet); pin the literal
     // so it matches CatanMatchResult's narrower `reason` type.
     store().setWinner({ reason: 'win', winner: payload.winner })
