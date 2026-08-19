@@ -15,10 +15,6 @@ async function clickCoord(page: Page, key: string, y = 0): Promise<void> {
   await page.mouse.click(pos.x, pos.y)
 }
 
-async function statusText(page: Page): Promise<string> {
-  return (await page.getByTestId('status').textContent()) ?? ''
-}
-
 test('two browsers complete a full match to a win', async ({ browser }) => {
   const host = await (await browser.newContext()).newPage()
   const guest = await (await browser.newContext()).newPage()
@@ -45,6 +41,10 @@ test('two browsers complete a full match to a win', async ({ browser }) => {
   for (const target of path) {
     await expect(host.getByTestId('status')).toHaveText('your turn')
     await clickCoord(host, from, 0.55) // select our piece (occupied hex — click at piece mid-height)
+    // Destination clicks — moves AND captures alike — stay at ground level (y=0) and
+    // target the TILE, not the enemy piece: clickTile() resolves a capture through the
+    // same legalTargets gate regardless of what occupies the hex, so the destination
+    // side never needs its click to land on the enemy piece's cone.
     await clickCoord(host, target, 0) // move / capture (destination hex — ground level)
     from = target
 
