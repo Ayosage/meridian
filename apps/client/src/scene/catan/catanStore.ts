@@ -5,10 +5,13 @@ import {
   legalCityVertices,
   legalRoadEdges,
   legalSettlementVertices,
+  RESOURCES,
   standardTopology,
   type CatanClientState,
   type Coord,
   type EdgeId,
+  type Resource,
+  type ResourceCount,
   type VertexId,
 } from '@meridian/rules'
 
@@ -153,6 +156,39 @@ export function resolveHexClick(
   return { mode: { kind: 'steal', hex, victims } }
 }
 
+/** Per-resource counts the player has staged to discard; always fully populated (never partial). */
+export type DiscardSelection = Record<Resource, number>
+
+const EMPTY_DISCARD: DiscardSelection = { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 }
+
+/** Sum of a discard selection across all resources. */
+export function discardSelectionTotal(selection: DiscardSelection): number {
+  return RESOURCES.reduce((sum, r) => sum + selection[r], 0)
+}
+
+/** Pure: selection after +1 on `resource`, refusing to exceed the player's hand count for it. */
+export function incrementDiscardSelection(
+  hand: ResourceCount,
+  selection: DiscardSelection,
+  resource: Resource,
+): DiscardSelection {
+  if (selection[resource] >= hand[resource]) return selection
+  return { ...selection, [resource]: selection[resource] + 1 }
+}
+
+/** Pure: selection after -1 on `resource`, floored at 0. */
+export function decrementDiscardSelection(selection: DiscardSelection, resource: Resource): DiscardSelection {
+  if (selection[resource] <= 0) return selection
+  return { ...selection, [resource]: selection[resource] - 1 }
+}
+
+/** Pure: the `discard` intent for a selection. Protocol requires positive counts only — zeros omitted. */
+export function discardIntent(selection: DiscardSelection): CatanClientIntent {
+  const resources: Partial<ResourceCount> = {}
+  for (const r of RESOURCES) if (selection[r] > 0) resources[r] = selection[r]
+  return { type: 'discard', resources }
+}
+
 interface CatanState {
   status: CatanStatus
   roomId: string | null
@@ -161,6 +197,8 @@ interface CatanState {
   toast: string | null
   winner: CatanMatchResult | null
   mode: Mode
+  /** Cards staged to discard while in `discard` mode; reset on entering it, and on submit. */
+  discardSelection: DiscardSelection
   /** Lobby roster (waiting room), sessionIds by seat. */
   seats: string[]
   connected: boolean[]
@@ -187,6 +225,15 @@ interface CatanState {
   clickHex(hex: Coord, send: SendIntent): void
   /** Esc: cancel a voluntary placement mode. Never touches a forced mode. */
   cancelMode(): void
+
+  /** DiscardModal: +1 to a resource's staged discard count, capped at the hand count. */
+  incrementDiscard(resource: Resource): void
+  /** DiscardModal: -1 to a resource's staged discard count, floored at 0. */
+  decrementDiscard(resource: Resource): void
+  /** DiscardModal: sends `discard` iff the staged total equals what's owed; no-op otherwise. */
+  submitDiscard(send: SendIntent): void
+  /** StealChooser: victim-seat click — sends moveRobber with that stealFrom. No-op outside steal mode. */
+  clickStealVictim(victim: number, send: SendIntent): void
 }
 
 const INITIAL = {
@@ -197,6 +244,7 @@ const INITIAL = {
   toast: null as string | null,
   winner: null as CatanMatchResult | null,
   mode: IDLE_MODE,
+  discardSelection: EMPTY_DISCARD,
   seats: [] as string[],
   connected: [] as boolean[],
   targetPlayers: null as number | null,
@@ -211,12 +259,18 @@ export const useCatanStore = create<CatanState>((set, get) => ({
   setLobby: (seats, connected, targetPlayers) => set({ seats, connected, targetPlayers }),
 
   ingestSnapshot: (payload) => {
-    const { view, seat, mode } = get()
+    const { view, seat, mode, discardSelection } = get()
     if (view !== null && payload.seq <= view.seq) return // stale; drop
+    const nextMode = deriveMode(payload.view, seat, mode)
+    // Reset staged discards only on freshly entering discard mode — while
+    // already in it (subsequent snapshots as other seats discard too) the
+    // player's in-progress selection must survive.
+    const enteringDiscard = nextMode.kind === 'discard' && mode.kind !== 'discard'
     set({
       view: payload.view,
-      mode: deriveMode(payload.view, seat, mode),
+      mode: nextMode,
       status: payload.view.winner !== null ? 'ended' : 'playing',
+      discardSelection: enteringDiscard ? EMPTY_DISCARD : discardSelection,
     })
   },
 
@@ -275,5 +329,32 @@ export const useCatanStore = create<CatanState>((set, get) => ({
     if (!PLACEMENT_KINDS.has(mode.kind)) return
     if (view !== null && isModeForced(view, seat)) return
     set({ mode: IDLE_MODE })
+  },
+
+  incrementDiscard: (resource) => {
+    const { view, discardSelection } = get()
+    if (view === null) return
+    set({ discardSelection: incrementDiscardSelection(view.you.resources, discardSelection, resource) })
+  },
+
+  decrementDiscard: (resource) => {
+    const { discardSelection } = get()
+    set({ discardSelection: decrementDiscardSelection(discardSelection, resource) })
+  },
+
+  submitDiscard: (send) => {
+    const { view, seat, discardSelection } = get()
+    if (view === null || seat === null) return
+    const owed = view.turn.pendingDiscards[seat] ?? 0
+    if (discardSelectionTotal(discardSelection) !== owed) return
+    send(discardIntent(discardSelection))
+    set({ discardSelection: EMPTY_DISCARD })
+  },
+
+  clickStealVictim: (victim, send) => {
+    const { mode } = get()
+    if (mode.kind !== 'steal') return
+    if (!mode.victims.includes(victim)) return
+    send({ type: 'moveRobber', hex: mode.hex, stealFrom: victim })
   },
 }))

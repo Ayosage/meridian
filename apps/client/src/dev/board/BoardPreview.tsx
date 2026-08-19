@@ -11,6 +11,8 @@ import {
 import { CatanScene } from '../../scene/catan/CatanScene'
 import { useCatanStore, type Mode } from '../../scene/catan/catanStore'
 import { BuildBar } from '../../ui/BuildBar'
+import { DiscardModal } from '../../ui/DiscardModal'
+import { StealChooser } from '../../ui/StealChooser'
 
 /**
  * Local beginner-board view — no server, no room. Lets CatanScene's
@@ -36,10 +38,24 @@ function buildDemoView(): CatanClientState {
     [edgeId(center, 4)]: 3,
   }
 
+  // Task 10 needs seats 1 and 2 to look holding cards so StealChooser's
+  // "Player N (K cards)" labels are visible, and needs our own hand +
+  // pendingDiscards populated so DiscardModal has something to render.
+  const players = view.players.map((p, i) =>
+    i === 1 ? { ...p, resourceCount: 3 } : i === 2 ? { ...p, resourceCount: 5 } : p,
+  )
+
   // Task 9 needs a mode-switchable, our-turn "main phase" view (a fresh
   // game's real turn state starts in setup) so PickLayer/Highlights/BuildBar
   // can be eyeballed for every mode without a server driving turn.setup.
-  return { ...view, buildings, roads, turn: { ...view.turn, phase: 'main', current: 0 } }
+  return {
+    ...view,
+    buildings,
+    roads,
+    players,
+    turn: { ...view.turn, phase: 'main', current: 0, pendingDiscards: { 0: 4 } },
+    you: { ...view.you, resources: { wood: 3, brick: 2, sheep: 2, wheat: 2, ore: 0 } },
+  }
 }
 
 const MODE_SWITCHES: readonly { mode: Mode; label: string }[] = [
@@ -48,6 +64,8 @@ const MODE_SWITCHES: readonly { mode: Mode; label: string }[] = [
   { mode: { kind: 'placeSettlement' }, label: 'Place Settlement' },
   { mode: { kind: 'placeCity' }, label: 'Place City' },
   { mode: { kind: 'robber' }, label: 'Robber' },
+  { mode: { kind: 'discard' }, label: 'Discard' },
+  { mode: { kind: 'steal', hex: { q: 0, r: 0 }, victims: [1, 2] }, label: 'Steal' },
 ]
 
 /**
@@ -88,17 +106,26 @@ export function BoardPreview() {
   const view = useMemo(buildDemoView, [])
 
   // Task 9's PickLayer/Highlights/BuildBar read `seat`/`mode` from the store
-  // (not from CatanScene's `view` prop), so the store needs a seat even
-  // though this dev route has no server driving it.
+  // (not from CatanScene's `view` prop), and Task 10's DiscardModal/
+  // StealChooser additionally need the store's own `view` (for owed-discard
+  // count, hand counts, victim card counts) — none of that arrives via a
+  // server here, so seed it directly.
   useEffect(() => {
     useCatanStore.getState().setSeat(0)
-  }, [])
+    useCatanStore.getState().ingestSnapshot({ seq: 1, view })
+    // The demo view's baked-in pendingDiscards would otherwise force mode
+    // straight to 'discard' on mount (deriveMode ignores phase for that
+    // check) — reset to idle so the switcher's own default still holds.
+    useCatanStore.getState().setMode({ kind: 'idle' })
+  }, [view])
 
   return (
     <>
       <CatanScene view={view} />
       <ModeSwitcher />
       <BuildBar />
+      <DiscardModal />
+      <StealChooser />
     </>
   )
 }
