@@ -1,7 +1,7 @@
 # Meridian — Catan Pivot Design
 
 **Date:** 2026-08-19
-**Status:** Approved direction (user, 2026-08-19), spec pending user review
+**Status:** Approved (user, 2026-08-19)
 **Supersedes:** the abstract hex-tactics game design; the plan-1/plan-2 specs remain accurate as descriptions of the infrastructure they built.
 **Parent:** `docs/BRIEF.md` (2026-08-19 revision note)
 
