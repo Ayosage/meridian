@@ -1,6 +1,5 @@
 import { coordKey } from '../coord'
-import { isRuleError } from '../intent'
-import { catanError as err, type CatanIntent, type CatanRuleError } from './intent'
+import { catanError as err, isCatanRuleError, type CatanIntent, type CatanRuleError } from './intent'
 import { settlementDistanceOk } from './placement'
 import { applyRoll } from './production'
 import { applyBuild } from './build'
@@ -31,7 +30,7 @@ export function applyCatanIntent(
   if (state.winner !== null || state.turn.phase === 'ended')
     return err('GAME_OVER', 'the match is already decided')
   const result = dispatch(state, intent, rng)
-  if (isRuleError(result)) return result
+  if (isCatanRuleError(result)) return result
   return checkWin({ ...result, seq: state.seq + 1 })
 }
 

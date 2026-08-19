@@ -15,6 +15,7 @@ export type CatanIntent =
   | { type: 'playDevCard'; player: PlayerId; card: 'roadBuilding'; edges: readonly EdgeId[] }
   | { type: 'playDevCard'; player: PlayerId; card: 'yearOfPlenty'; take: readonly [Resource, Resource] }
   | { type: 'playDevCard'; player: PlayerId; card: 'monopoly'; resource: Resource }
+  | { type: 'bankTrade'; player: PlayerId; give: Resource; get: Resource }
   | { type: 'offerTrade'; player: PlayerId; give: Partial<ResourceCount>; get: Partial<ResourceCount> }
   | {
       type: 'respondTrade'
@@ -51,4 +52,9 @@ export interface CatanRuleError {
 
 export function catanError(code: CatanErrorCode, message: string): CatanRuleError {
   return { error: true, code, message }
+}
+
+/** Same runtime shape as the house isRuleError, but narrows to CatanRuleError. */
+export function isCatanRuleError(v: unknown): v is CatanRuleError {
+  return typeof v === 'object' && v !== null && (v as { error?: unknown }).error === true
 }

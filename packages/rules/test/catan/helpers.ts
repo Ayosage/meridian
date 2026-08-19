@@ -6,7 +6,7 @@ import {
   createCatanGame,
   createRng,
   edgeId,
-  isRuleError,
+  isCatanRuleError,
   subtractResources,
   vertexId,
   type CatanErrorCode,
@@ -34,7 +34,7 @@ export function die(k: number): number {
 
 export function apply(state: CatanState, intent: CatanIntent, rng: Rng = createRng(0)): CatanState {
   const result = applyCatanIntent(state, intent, rng)
-  if (isRuleError(result)) throw new Error(`unexpected ${result.code}: ${result.message} (intent ${intent.type})`)
+  if (isCatanRuleError(result)) throw new Error(`unexpected ${result.code}: ${result.message} (intent ${intent.type})`)
   return result
 }
 
@@ -45,7 +45,7 @@ export function expectError(
   rng: Rng = createRng(0),
 ): void {
   const result = applyCatanIntent(state, intent, rng)
-  if (!isRuleError(result)) throw new Error(`expected ${code}, got success (intent ${intent.type})`)
+  if (!isCatanRuleError(result)) throw new Error(`expected ${code}, got success (intent ${intent.type})`)
   expect(result.code).toBe(code)
 }
 
