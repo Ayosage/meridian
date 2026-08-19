@@ -6,6 +6,8 @@ import * as THREE from 'three'
 import type { CatanClientState } from '@meridian/rules'
 import { coordToWorld } from '../layout'
 import { CatanBoard } from './CatanBoard'
+import { Highlights } from './Highlights'
+import { PickLayer } from './PickLayer'
 import { Pieces } from './Pieces'
 import { createWaterMaterial } from './waterMaterial'
 import { GoldenHourRig, SkyBackdrop } from './rig'
@@ -88,6 +90,8 @@ export function CatanScene({ view }: { view: CatanClientState }) {
       <GoldenHourRig />
       <CatanBoard board={view.board} />
       <Pieces view={view} />
+      <PickLayer view={view} />
+      <Highlights view={view} />
       <Water view={view} />
       <OrbitControls
         target={[0, 0, 0]}

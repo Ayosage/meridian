@@ -1,6 +1,16 @@
 import { create } from 'zustand'
-import type { CatanSnapshotPayload } from '@meridian/protocol'
-import type { CatanClientState, Coord } from '@meridian/rules'
+import type { CatanClientIntent, CatanSnapshotPayload } from '@meridian/protocol'
+import {
+  coordKey,
+  legalCityVertices,
+  legalRoadEdges,
+  legalSettlementVertices,
+  standardTopology,
+  type CatanClientState,
+  type Coord,
+  type EdgeId,
+  type VertexId,
+} from '@meridian/rules'
 
 export type CatanStatus =
   | 'idle'
@@ -55,6 +65,94 @@ export function deriveMode(view: CatanClientState, seat: number | null, current:
   return STALE_IF_UNFORCED.has(current.kind) ? IDLE_MODE : current
 }
 
+/** True while `deriveMode` would force *some* mode on this seat right now (setup/discard/robber). */
+function isModeForced(view: CatanClientState, seat: number | null): boolean {
+  return deriveMode(view, seat, IDLE_MODE).kind !== 'idle'
+}
+
+/**
+ * Function that actually delivers an intent to the server. Store handlers
+ * below take it as a parameter (never imported at module scope) so that:
+ *   1. catanStore.ts stays decoupled from net/catan.ts, which itself imports
+ *      useCatanStore — importing sendCatanIntent here would be circular.
+ *   2. tests can inject a spy and assert on emitted intents with zero mocking.
+ * Callers (PickLayer, BuildBar) pass the real `sendCatanIntent` explicitly.
+ */
+export type SendIntent = (intent: CatanClientIntent) => void
+
+/** Legal vertex ids for the given mode; empty outside placeSettlement/placeCity. */
+export function legalVerticesForMode(view: CatanClientState, seat: number, mode: Mode): VertexId[] {
+  if (mode.kind === 'placeSettlement') {
+    return legalSettlementVertices(view, seat, { setup: view.turn.phase === 'setup' })
+  }
+  if (mode.kind === 'placeCity') return legalCityVertices(view, seat)
+  return []
+}
+
+/** Legal edge ids for the given mode; setup uses the just-placed settlement's open edges. */
+export function legalEdgesForMode(view: CatanClientState, seat: number, mode: Mode): EdgeId[] {
+  if (mode.kind !== 'placeRoad') return []
+  if (view.turn.phase !== 'setup') return legalRoadEdges(view, seat)
+  const last = view.turn.setup?.lastSettlement
+  if (!last) return []
+  return (standardTopology().vertexEdges[last] ?? []).filter((e) => view.roads[e] === undefined)
+}
+
+/** Pure: the intent a vertex click produces in the given mode, or null if illegal/inapplicable. */
+export function resolveVertexClick(
+  view: CatanClientState,
+  seat: number,
+  mode: Mode,
+  vertex: VertexId,
+): CatanClientIntent | null {
+  if (mode.kind !== 'placeSettlement' && mode.kind !== 'placeCity') return null
+  if (!legalVerticesForMode(view, seat, mode).includes(vertex)) return null
+  if (mode.kind === 'placeCity') return { type: 'build', piece: 'city', location: vertex }
+  return view.turn.phase === 'setup'
+    ? { type: 'placeSetupSettlement', vertex }
+    : { type: 'build', piece: 'settlement', location: vertex }
+}
+
+/** Pure: the intent an edge click produces in the given mode, or null if illegal/inapplicable. */
+export function resolveEdgeClick(
+  view: CatanClientState,
+  seat: number,
+  mode: Mode,
+  edge: EdgeId,
+): CatanClientIntent | null {
+  if (mode.kind !== 'placeRoad') return null
+  if (!legalEdgesForMode(view, seat, mode).includes(edge)) return null
+  return view.turn.phase === 'setup'
+    ? { type: 'placeSetupRoad', edge }
+    : { type: 'build', piece: 'road', location: edge }
+}
+
+/** Adjacent-owner ids the robber could steal from at `hex`: not us, and holding resources. */
+export function robberVictims(view: CatanClientState, seat: number, hex: Coord): number[] {
+  const verts = standardTopology().hexVertices[coordKey(hex)] ?? []
+  const owners = new Set<number>()
+  for (const v of verts) {
+    const owner = view.buildings[v]?.owner
+    if (owner === undefined || owner === seat) continue
+    if ((view.players[owner]?.resourceCount ?? 0) > 0) owners.add(owner)
+  }
+  return [...owners]
+}
+
+/** Pure: what a hex click does in robber mode — send directly, enter steal mode, or nothing. */
+export function resolveHexClick(
+  view: CatanClientState,
+  seat: number,
+  mode: Mode,
+  hex: Coord,
+): { intent: CatanClientIntent } | { mode: Mode } | null {
+  if (mode.kind !== 'robber') return null
+  if (coordKey(hex) === view.board.robber) return null // robber can't stay put
+  const victims = robberVictims(view, seat, hex)
+  if (victims.length === 0) return { intent: { type: 'moveRobber', hex, stealFrom: null } }
+  return { mode: { kind: 'steal', hex, victims } }
+}
+
 interface CatanState {
   status: CatanStatus
   roomId: string | null
@@ -78,6 +176,17 @@ interface CatanState {
   ruleError(message: string): void
   setWinner(result: CatanMatchResult): void
   reset(): void
+
+  /** BuildBar: pick (or un-pick, toggling back to idle) a voluntary placement mode. */
+  toggleBuildMode(kind: 'placeRoad' | 'placeSettlement' | 'placeCity'): void
+  /** PickLayer: vertex click, dispatched per current mode. No-op if illegal/inapplicable. */
+  clickVertex(vertex: VertexId, send: SendIntent): void
+  /** PickLayer: edge click, dispatched per current mode. No-op if illegal/inapplicable. */
+  clickEdge(edge: EdgeId, send: SendIntent): void
+  /** PickLayer: hex click in robber mode — sends moveRobber or enters steal mode. */
+  clickHex(hex: Coord, send: SendIntent): void
+  /** Esc: cancel a voluntary placement mode. Never touches a forced mode. */
+  cancelMode(): void
 }
 
 const INITIAL = {
@@ -120,11 +229,51 @@ export const useCatanStore = create<CatanState>((set, get) => ({
       set({ toast: message })
       return
     }
-    const stillForced = view !== null && deriveMode(view, seat, IDLE_MODE).kind !== 'idle'
+    const stillForced = view !== null && isModeForced(view, seat)
     set({ toast: message, mode: stillForced ? mode : IDLE_MODE })
   },
 
   setWinner: (winner) => set({ winner, status: 'ended' }),
 
   reset: () => set({ ...INITIAL }),
+
+  toggleBuildMode: (kind) => {
+    const { mode } = get()
+    if (STALE_IF_UNFORCED.has(mode.kind)) return // never override a forced discard/robber/steal mode
+    set({ mode: mode.kind === kind ? IDLE_MODE : { kind } })
+  },
+
+  clickVertex: (vertex, send) => {
+    const { view, seat, mode } = get()
+    if (view === null || seat === null) return
+    const intent = resolveVertexClick(view, seat, mode, vertex)
+    if (!intent) return
+    send(intent)
+    if (!isModeForced(view, seat)) set({ mode: IDLE_MODE })
+  },
+
+  clickEdge: (edge, send) => {
+    const { view, seat, mode } = get()
+    if (view === null || seat === null) return
+    const intent = resolveEdgeClick(view, seat, mode, edge)
+    if (!intent) return
+    send(intent)
+    if (!isModeForced(view, seat)) set({ mode: IDLE_MODE })
+  },
+
+  clickHex: (hex, send) => {
+    const { view, seat, mode } = get()
+    if (view === null || seat === null) return
+    const result = resolveHexClick(view, seat, mode, hex)
+    if (!result) return
+    if ('intent' in result) send(result.intent)
+    else set({ mode: result.mode })
+  },
+
+  cancelMode: () => {
+    const { view, seat, mode } = get()
+    if (!PLACEMENT_KINDS.has(mode.kind)) return
+    if (view !== null && isModeForced(view, seat)) return
+    set({ mode: IDLE_MODE })
+  },
 }))
