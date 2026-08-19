@@ -1,2 +1,5 @@
 export * from './rng'
 export * from './topology'
+export * from './types'
+export * from './data'
+export * from './board'
