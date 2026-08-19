@@ -1,5 +1,20 @@
 # Meridian — Project Brief
 
+> **REVISED 2026-08-19 (supersedes the "original abstract game" framing below):**
+> Meridian is a **Settlers of Catan implementation** — the real Catan loop
+> (resource terrain hexes, number tokens, dice production, settlements/cities
+> on vertices, roads on edges, the robber, victory points) so viewers
+> instantly recognize what they're looking at. Original name and original
+> art; the mechanics are Catan's. Visual bar: **Civilization-level board
+> artistry** — terrain tiles as rich mini-dioramas (forests, pastures,
+> fields, hills, mountains, sea), detailed buildings, real 3D assets, not
+> abstract minimalism. This is a **portfolio display piece, not a product**.
+> Pillar 1's "art direction over asset quantity" is replaced by: rich assets
+> unified by custom shaders and lighting. Pillars 2-4 (performance,
+> multiplayer-first, rules-as-data where practical) stand. The hex-tactics
+> placeholder ruleset and the plan-2 client were infrastructure milestones;
+> the Catan data model (vertices/edges/resources) is a new engine cycle.
+
 **What:** An original online board game built in React Three Fiber. The
 long-tail portfolio project (in-progress with a public devlog is fine).
 
