@@ -40,6 +40,17 @@ export function legalCityVertices(state: CatanState, player: PlayerId): VertexId
   )
 }
 
+/** 2 with a building on a matching-resource port, 3 with any generic port, else 4. */
+export function bankTradeRate(state: CatanState, player: PlayerId, resource: Resource): 4 | 3 | 2 {
+  let rate: 4 | 3 = 4
+  for (const port of state.board.ports) {
+    if (!port.vertices.some((v) => state.buildings[v]?.owner === player)) continue
+    if (port.kind === resource) return 2
+    if (port.kind === 'generic') rate = 3
+  }
+  return rate
+}
+
 export function affordable(
   state: CatanState,
   player: PlayerId,

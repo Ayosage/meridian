@@ -5,6 +5,7 @@ import { settlementDistanceOk } from './placement'
 import { applyRoll } from './production'
 import { applyBuild } from './build'
 import { applyDiscard, applyMoveRobber } from './robber'
+import { applyBankTrade } from './trade'
 import type { Rng } from './rng'
 import type { CatanState } from './state'
 import { standardTopology } from './topology'
@@ -47,6 +48,8 @@ function dispatch(state: CatanState, intent: CatanIntent, rng: Rng): CatanState 
       return applyMoveRobber(state, intent, rng)
     case 'build':
       return applyBuild(state, intent)
+    case 'bankTrade':
+      return applyBankTrade(state, intent)
     default:
       return err('BAD_INTENT', 'not implemented yet') // replaced task by task (6-11)
   }
