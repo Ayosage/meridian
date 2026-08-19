@@ -1,0 +1,54 @@
+import type { PlayerId } from '../state'
+import { COSTS } from './data'
+import { settlementDistanceOk } from './placement'
+import type { CatanState } from './state'
+import { standardTopology, type EdgeId, type VertexId } from './topology'
+import { hasResources, type Resource } from './types'
+
+/** Vacant edges connected to the player's network; roads cannot pass through an opponent's building. */
+export function legalRoadEdges(state: CatanState, player: PlayerId): EdgeId[] {
+  const topo = standardTopology()
+  return topo.edges.filter((e) => {
+    if (state.roads[e] !== undefined) return false
+    for (const v of topo.edgeVertices[e]!) {
+      const building = state.buildings[v]
+      if (building?.owner === player) return true
+      if (building) continue // opponent building blocks passage through this vertex
+      if ((topo.vertexEdges[v] ?? []).some((e2) => e2 !== e && state.roads[e2] === player)) return true
+    }
+    return false
+  })
+}
+
+/** Distance rule always; connection to an own road unless setup. */
+export function legalSettlementVertices(
+  state: CatanState,
+  player: PlayerId,
+  opts: { setup?: boolean } = {},
+): VertexId[] {
+  const topo = standardTopology()
+  return topo.vertices.filter((v) => {
+    if (!settlementDistanceOk(state, v)) return false
+    if (opts.setup) return true
+    return (topo.vertexEdges[v] ?? []).some((e) => state.roads[e] === player)
+  })
+}
+
+export function legalCityVertices(state: CatanState, player: PlayerId): VertexId[] {
+  return Object.keys(state.buildings).filter(
+    (v) => state.buildings[v]!.owner === player && state.buildings[v]!.kind === 'settlement',
+  )
+}
+
+export function affordable(
+  state: CatanState,
+  player: PlayerId,
+): Record<'road' | 'settlement' | 'city' | 'devCard', boolean> {
+  const hand = state.players[player]!.resources
+  return {
+    road: hasResources(hand, COSTS.road),
+    settlement: hasResources(hand, COSTS.settlement),
+    city: hasResources(hand, COSTS.city),
+    devCard: hasResources(hand, COSTS.devCard),
+  }
+}

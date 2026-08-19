@@ -73,9 +73,9 @@ describe('setup draft', () => {
     expectError(state, { type: 'placeSetupRoad', player: 0, edge: edgeId({ q: 0, r: 0 }, 0) }, 'ILLEGAL_PLACEMENT')
   })
 
-  it('unwired gameplay intents fall through to BAD_INTENT for now', () => {
-    // Tasks 6-11 replace these stubs; their own tests then assert BAD_PHASE during setup
+  it('gameplay intents are rejected during setup', () => {
     const state = fresh()
-    expectError(state, { type: 'build', player: 0, piece: 'road', location: SETUP_PLACEMENTS[0]!.edge }, 'BAD_INTENT')
+    expectError(state, { type: 'rollDice', player: 0 }, 'BAD_PHASE')
+    expectError(state, { type: 'build', player: 0, piece: 'road', location: SETUP_PLACEMENTS[0]!.edge }, 'BAD_PHASE')
   })
 })
