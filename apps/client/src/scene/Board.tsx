@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { coordKey, type Coord } from '@meridian/rules'
 import { TILE_SIZE, boardCoords, coordToWorld } from './layout'
-import { TILE_COLORS, tileStateFor } from './tileVisuals'
+import { createBoardMaterial } from './boardMaterial'
+import { TILE_STATE, tileStateFor } from './tileVisuals'
 
 const SCRATCH_MATRIX = new THREE.Matrix4()
-const SCRATCH_COLOR = new THREE.Color()
 
 interface BoardProps {
   radius: number
@@ -34,6 +35,20 @@ export function Board({
   }, [])
   useEffect(() => () => geometry.dispose(), [geometry])
 
+  const material = useMemo(() => createBoardMaterial(), [])
+  useEffect(() => () => material.dispose(), [material])
+  const stateAttr = useMemo(
+    () => new THREE.InstancedBufferAttribute(new Float32Array(coords.length), 1),
+    [coords],
+  )
+  useEffect(() => {
+    geometry.setAttribute('aState', stateAttr)
+  }, [geometry, stateAttr])
+
+  useFrame((state) => {
+    material.uniforms.uTime!.value = state.clock.elapsedTime
+  })
+
   // Static transforms: once per board.
   useEffect(() => {
     const mesh = meshRef.current
@@ -55,14 +70,10 @@ export function Board({
   }, [legalTargets, selectedCoordKey])
 
   function paint(): void {
-    const mesh = meshRef.current
-    if (!mesh) return
     keys.forEach((key, i) => {
-      const state = tileStateFor(key, hoveredRef.current, selectedCoordKey, legalTargets)
-      const [r, g, b] = TILE_COLORS[state]
-      mesh.setColorAt(i, SCRATCH_COLOR.setRGB(r, g, b))
+      stateAttr.array[i] = TILE_STATE[tileStateFor(key, hoveredRef.current, selectedCoordKey, legalTargets)]
     })
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    stateAttr.needsUpdate = true
   }
 
   function setHover(key: string | null): void {
@@ -75,7 +86,7 @@ export function Board({
   return (
     <instancedMesh
       ref={meshRef}
-      args={[geometry, undefined, coords.length]}
+      args={[geometry, material, coords.length]}
       onPointerMove={(e) => {
         e.stopPropagation()
         setHover(e.instanceId !== undefined ? (keys[e.instanceId] ?? null) : null)
@@ -87,8 +98,6 @@ export function Board({
         const c = coords[e.instanceId]
         if (c) onTileClick(c)
       }}
-    >
-      <meshStandardMaterial />
-    </instancedMesh>
+    />
   )
 }
