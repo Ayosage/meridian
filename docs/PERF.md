@@ -42,3 +42,30 @@ Production notes for the board client phase: forest pines are 14 nodes
 sharing 3 meshes per tile — convert to InstancedMesh per variant across the
 whole board; settlement is 5 part-meshes — merge to ≤2 (roof separate for
 player tint); token numerals (580 tris each) are merge/decimate candidates.
+
+## Full board — 19 Catan tiles + demo pieces, /board route (2026-08-19)
+
+| Metric | Budget | Measured |
+|---|---|---|
+| Draw calls | ~250 | **1049** |
+| Triangles | — | 257,293 |
+| FPS (rAF counter, 2s) | 60 | ~60 (rAF/vsync-capped; not a reliable GPU-bound signal at dpr 1) |
+
+Method: `window.__meridianDebug.catanRenderInfo()` (dev-only hook on
+`CatanScene`, mirroring the `renderInfo()` idiom in `dev/debugHooks.tsx`) +
+a `requestAnimationFrame` counter over 2s, Playwright Chromium, dpr 1
+(devicePixelRatio was not controllable from this harness — dpr 2 numbers,
+comparable to the beauty-slice row above, still need a real-browser
+re-measure). `gl.info` needed `autoReset = false` + a manual reset at the
+start of each frame (lowest `useFrame` priority) to read the whole frame's
+total — by default it only reflects the postprocessing composer's last
+internal `renderer.render()` call (the 1-triangle fullscreen blit).
+
+**Concern, not fixed in this task:** 1049 draw calls is ~4x the ~250
+budget flagged in the task brief. The scatter/pattern terrains are the
+cause, unbatched: pasture is 84 nodes/tile × 4 tiles = 336 draw calls,
+forest is 15 nodes/tile × 4 tiles = 60, before tokens/buildings/roads/ports
+are counted. Per explicit dispatch instructions this task does NOT
+implement the instancing fallback (merge pines/tufts/clumps into one
+`InstancedMesh` per variant, built once from the GLB geometry at mount) —
+that's flagged for a follow-up task/decision.

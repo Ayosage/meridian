@@ -1,7 +1,10 @@
+import type { Resource } from '@meridian/rules'
+
 /**
  * Beauty-slice palette tokens — "Painted Miniature at Golden Hour".
  * Spec: docs/superpowers/specs/2026-08-19-beauty-slice-art-direction-design.md §1, §4.
  * These are the single source of truth for slice colors; production inherits them.
+ * Promoted from dev/slice/palette.ts (Task 8) so the full board client shares one copy.
  */
 export const palette = {
   terrain: {
@@ -31,3 +34,12 @@ export const palette = {
     groundFill: '#6b5e4f',
   },
 } as const
+
+/** Port sail tint for a 2:1 resource port; generic ports keep the GLB's cream default. */
+export const RESOURCE_COLORS: Readonly<Record<Resource, string>> = {
+  wood: '#2d5a27',
+  brick: '#b34a2a',
+  sheep: '#8fbc5a',
+  wheat: '#d9a84e',
+  ore: '#7a8290',
+}

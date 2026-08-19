@@ -3,7 +3,8 @@ import { palette } from './palette'
 
 /** Circumradius of the tile puck (matches assets/slice.blend). */
 const PUCK_R = 0.98
-const MAX_TILES = 8
+/** Promoted from the 8-tile slice cap (Task 8) — the full board carries 19 hex centers. */
+const MAX_TILES = 24
 
 const vertexShader = /* glsl */ `
 varying vec3 vWorld;

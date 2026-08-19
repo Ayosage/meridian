@@ -6,14 +6,23 @@ import { App } from './App'
 const SliceReview = lazy(() =>
   import('./dev/slice/SliceScene').then((m) => ({ default: m.SliceReview })),
 )
+// dev-only full-board preview route (local beginner board, no server)
+const BoardPreview = lazy(() =>
+  import('./dev/board/BoardPreview').then((m) => ({ default: m.BoardPreview })),
+)
 
 const root = document.getElementById('root')
 if (!root) throw new Error('missing #root element')
 const isSlice = import.meta.env.DEV && window.location.pathname === '/slice'
+const isBoard = import.meta.env.DEV && window.location.pathname === '/board'
 createRoot(root).render(
   isSlice ? (
     <Suspense fallback={null}>
       <SliceReview />
+    </Suspense>
+  ) : isBoard ? (
+    <Suspense fallback={null}>
+      <BoardPreview />
     </Suspense>
   ) : (
     <App />
