@@ -110,6 +110,56 @@ function Water() {
   )
 }
 
+/**
+ * Stylized golden-hour backdrop: warm horizon wash all around (like a studio
+ * seamless behind a photographed miniature), cool slate zenith, and an extra
+ * peach glow on the sun side. Deliberately not physical — the physical sky
+ * puts all warmth behind the default cameras.
+ */
+function SkyBackdrop() {
+  const mat = useMemo(() => {
+    return new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      uniforms: {
+        uZenith: { value: new THREE.Color('#4a5d80') },
+        uHorizon: { value: new THREE.Color('#e8b98a') },
+        uGlow: { value: new THREE.Color('#ffcf9a') },
+        uSunDir: { value: new THREE.Vector3(6.5, 2.9, 4.5).normalize() },
+      },
+      vertexShader: /* glsl */ `
+        varying vec3 vDir;
+        void main() {
+          vDir = normalize(position);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform vec3 uZenith;
+        uniform vec3 uHorizon;
+        uniform vec3 uGlow;
+        uniform vec3 uSunDir;
+        varying vec3 vDir;
+        void main() {
+          vec3 d = normalize(vDir);
+          float h = clamp(d.y, 0.0, 1.0);
+          vec3 col = mix(uHorizon, uZenith, pow(h, 0.55));
+          float sunAmt = pow(max(dot(d, normalize(uSunDir)), 0.0), 6.0);
+          col = mix(col, uGlow, sunAmt * (1.0 - h) * 0.9);
+          gl_FragColor = vec4(col, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }
+      `,
+    })
+  }, [])
+  return (
+    <mesh material={mat} renderOrder={-1}>
+      <sphereGeometry args={[60, 32, 16]} />
+    </mesh>
+  )
+}
+
 function GoldenHourRig() {
   const sun = useRef<THREE.DirectionalLight>(null)
   return (
@@ -155,7 +205,7 @@ export function SliceReview() {
       camera={{ position: cam, fov: 40, near: 0.3, far: 100 }}
       gl={{ antialias: true, toneMappingExposure: 1.15 }}
     >
-      <color attach="background" args={['#2b3a55']} />
+      <SkyBackdrop />
       <GoldenHourRig />
       {TILES.map((t) => (
         <Tile key={`${t.coord.q},${t.coord.r}`} coord={t.coord} dressing={t.dressing} token={t.token} />
