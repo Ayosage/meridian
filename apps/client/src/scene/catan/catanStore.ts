@@ -15,6 +15,12 @@ import {
   type VertexId,
 } from '@meridian/rules'
 import {
+  legalRoadBuildingEdges,
+  monopolyIntent,
+  resolveRoadBuildingClick,
+  yearOfPlentyIntent,
+} from './devCardLogic'
+import {
   bankTradeIntent,
   counterTradeIntent,
   decrementSelection,
@@ -22,6 +28,7 @@ import {
   incomingOfferFor,
   incrementSelection,
   offerTradeIntent,
+  selectionTotal,
   type ResourceSelection,
 } from './tradeLogic'
 
@@ -52,6 +59,7 @@ export type Mode =
   | { kind: 'discard' }
   | { kind: 'robber' }
   | { kind: 'steal'; hex: Coord; victims: number[] }
+  | { kind: 'roadBuilding'; staged: EdgeId[] }
 
 const IDLE_MODE: Mode = { kind: 'idle' }
 const PLACEMENT_KINDS: ReadonlySet<Mode['kind']> = new Set(['placeSettlement', 'placeRoad', 'placeCity'])
@@ -82,6 +90,8 @@ export function deriveMode(view: CatanClientState, seat: number | null, current:
   // setup turn as a phantom "voluntary" build mode with no legal targets.
   if (STALE_IF_UNFORCED.has(current.kind)) return IDLE_MODE
   if ((current.kind === 'placeSettlement' || current.kind === 'placeRoad') && current.forced) return IDLE_MODE
+  if (current.kind === 'roadBuilding' && (view.turn.phase !== 'main' || view.turn.current !== seat))
+    return IDLE_MODE
   return current
 }
 
@@ -111,6 +121,7 @@ export function legalVerticesForMode(view: CatanClientState, seat: number, mode:
 
 /** Legal edge ids for the given mode; setup uses the just-placed settlement's open edges. */
 export function legalEdgesForMode(view: CatanClientState, seat: number, mode: Mode): EdgeId[] {
+  if (mode.kind === 'roadBuilding') return legalRoadBuildingEdges(view, seat, mode.staged)
   if (mode.kind !== 'placeRoad') return []
   if (view.turn.phase !== 'setup') return legalRoadEdges(view, seat)
   const last = view.turn.setup?.lastSettlement
@@ -233,6 +244,11 @@ interface CatanState {
   /** Staged counter-offer draft while responding to an incoming trade; null outside that flow. */
   counterDraft: { give: ResourceSelection; get: ResourceSelection } | null
 
+  /** DevModal: which dev-card modal (if any) is open. */
+  devModal: 'yearOfPlenty' | 'monopoly' | null
+  /** Staged yearOfPlenty picks; reset on opening the modal. */
+  plentySelection: ResourceSelection
+
   setStatus(status: CatanStatus): void
   setJoined(roomId: string): void
   setSeat(seat: number): void
@@ -254,6 +270,8 @@ interface CatanState {
   clickHex(hex: Coord, send: SendIntent): void
   /** Esc: cancel a voluntary placement mode. Never touches a forced mode. */
   cancelMode(): void
+  /** BuildBar/DevPanel: enter roadBuilding mode if the view shows a playable roadBuilding card. */
+  startRoadBuilding(): void
 
   /** DiscardModal: +1 to a resource's staged discard count, capped at the hand count. */
   incrementDiscard(resource: Resource): void
@@ -301,6 +319,18 @@ interface CatanState {
   confirmTradeWith(partner: number, send: SendIntent): void
   /** Offerer: cancel the open offer outright. */
   cancelOpenTrade(send: SendIntent): void
+
+  /** DevModal: open the yearOfPlenty/monopoly modal, resetting the plenty staging. */
+  openDevModal(kind: 'yearOfPlenty' | 'monopoly'): void
+  closeDevModal(): void
+  /** yearOfPlenty: +1 to a resource's staged pick, capped at 2 total and at the bank's count. */
+  incPlenty(r: Resource): void
+  /** yearOfPlenty: -1 to a resource's staged pick, floored at 0. */
+  decPlenty(r: Resource): void
+  /** yearOfPlenty: sends playDevCard from the staged picks and closes the modal on success. */
+  submitPlenty(send: SendIntent): void
+  /** monopoly: sends playDevCard for the chosen resource and closes the modal. */
+  submitMonopoly(r: Resource, send: SendIntent): void
 }
 
 const INITIAL = {
@@ -322,6 +352,8 @@ const INITIAL = {
   bankGive: null as Resource | null,
   bankGet: null as Resource | null,
   counterDraft: null as { give: ResourceSelection; get: ResourceSelection } | null,
+  devModal: null as 'yearOfPlenty' | 'monopoly' | null,
+  plentySelection: emptySelection(),
 }
 
 export const useCatanStore = create<CatanState>((set, get) => ({
@@ -363,6 +395,10 @@ export const useCatanStore = create<CatanState>((set, get) => ({
 
   ruleError: (message) => {
     const { view, seat, mode } = get()
+    if (mode.kind === 'roadBuilding') {
+      set({ toast: message, mode: { kind: 'roadBuilding', staged: [] } })
+      return
+    }
     if (!PLACEMENT_KINDS.has(mode.kind)) {
       set({ toast: message })
       return
@@ -393,6 +429,15 @@ export const useCatanStore = create<CatanState>((set, get) => ({
   clickEdge: (edge, send) => {
     const { view, seat, mode } = get()
     if (view === null || seat === null) return
+    if (mode.kind === 'roadBuilding') {
+      const result = resolveRoadBuildingClick(view, seat, mode, edge)
+      if (!result) return
+      if ('intent' in result) {
+        send(result.intent)
+        set({ mode: IDLE_MODE })
+      } else set({ mode: result.mode })
+      return
+    }
     const intent = resolveEdgeClick(view, seat, mode, edge)
     if (!intent) return
     send(intent)
@@ -410,7 +455,7 @@ export const useCatanStore = create<CatanState>((set, get) => ({
 
   cancelMode: () => {
     const { view, seat, mode } = get()
-    if (!PLACEMENT_KINDS.has(mode.kind)) return
+    if (!PLACEMENT_KINDS.has(mode.kind) && mode.kind !== 'roadBuilding') return
     if (view !== null && isModeForced(view, seat)) return
     set({ mode: IDLE_MODE })
   },
@@ -515,4 +560,32 @@ export const useCatanStore = create<CatanState>((set, get) => ({
   cancelCounter: () => set({ counterDraft: null }),
   confirmTradeWith: (partner, send) => send({ type: 'confirmTrade', partner }),
   cancelOpenTrade: (send) => send({ type: 'cancelTrade' }),
+
+  startRoadBuilding: () => {
+    const { view, seat, mode } = get()
+    if (view === null || seat === null) return
+    if (STALE_IF_UNFORCED.has(mode.kind)) return
+    set({ mode: { kind: 'roadBuilding', staged: [] }, tradeOpen: false })
+  },
+  openDevModal: (devModal) => set({ devModal, plentySelection: emptySelection() }),
+  closeDevModal: () => set({ devModal: null }),
+  incPlenty: (r) => {
+    const { view, plentySelection } = get()
+    if (view === null) return
+    if (selectionTotal(plentySelection) >= 2) return
+    set({ plentySelection: incrementSelection(plentySelection, r, Math.min(2, view.bank[r])) })
+  },
+  decPlenty: (r) => set({ plentySelection: decrementSelection(get().plentySelection, r) }),
+  submitPlenty: (send) => {
+    const { view, plentySelection } = get()
+    if (view === null) return
+    const intent = yearOfPlentyIntent(plentySelection, view.bank)
+    if (!intent) return
+    send(intent)
+    set({ devModal: null })
+  },
+  submitMonopoly: (r, send) => {
+    send(monopolyIntent(r))
+    set({ devModal: null })
+  },
 }))
