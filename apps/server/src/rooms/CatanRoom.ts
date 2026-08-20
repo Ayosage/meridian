@@ -25,6 +25,8 @@ interface CreateOptions {
   seed?: number
   /** TEST-ONLY: forces the room rng to a scripted value list. */
   rngScript?: number[]
+  /** TEST-ONLY: lower victory-point target so seeded E2E matches finish fast. */
+  targetVp?: number
 }
 
 export class CatanRoom extends Room<CatanLobbyState> {
@@ -35,6 +37,7 @@ export class CatanRoom extends Room<CatanLobbyState> {
   private abandonMs = 10 * 60_000
   /** connected client per seat; null = pilot drives */
   private seatClients: (Client | null)[] = []
+  private targetVp: number | undefined
   private pilotTimer: Delayed | null = null
   private abandonTimer: Delayed | null = null
 
@@ -45,6 +48,7 @@ export class CatanRoom extends Room<CatanLobbyState> {
     this.layout = options.layout ?? 'random'
     this.pilotDelayMs = options.pilotDelayMs ?? 600
     this.abandonMs = (options.abandonMinutes ?? 10) * 60_000
+    this.targetVp = options.targetVp
     this.rng = options.rngScript
       ? stubRng(options.rngScript)
       : createRng(options.seed ?? Math.floor(Math.random() * 2 ** 31))
@@ -75,7 +79,7 @@ export class CatanRoom extends Room<CatanLobbyState> {
 
   private startGame() {
     const n = this.state.seats.length as 3 | 4
-    this.game = createCatanGame({ playerCount: n, layout: this.layout }, this.rng)
+    this.game = createCatanGame({ playerCount: n, layout: this.layout, targetVp: this.targetVp }, this.rng)
     this.state.phase = 'playing'
     this.lock()
     this.broadcastViews()

@@ -61,4 +61,6 @@ export interface CatanState {
   turn: TurnState
   awards: { longestRoad: PlayerId | null; largestArmy: PlayerId | null }
   winner: PlayerId | null
+  /** Victory-point target; absent = the standard VP_TARGET (10). Short matches (E2E) set it lower. */
+  targetVp?: number
 }

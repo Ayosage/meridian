@@ -8,6 +8,8 @@ import { emptyResources, type DevCard } from './types'
 export interface CatanGameOptions {
   playerCount: 3 | 4
   layout?: 'beginner' | 'random'
+  /** Victory-point target override; omit for the standard 10. */
+  targetVp?: number
 }
 
 export function createCatanGame(options: CatanGameOptions, rng: Rng): CatanState {
@@ -54,5 +56,6 @@ export function createCatanGame(options: CatanGameOptions, rng: Rng): CatanState
     },
     awards: { longestRoad: null, largestArmy: null },
     winner: null,
+    ...(options.targetVp !== undefined ? { targetVp: options.targetVp } : {}),
   }
 }

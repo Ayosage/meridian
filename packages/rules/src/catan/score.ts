@@ -31,7 +31,7 @@ export function updateLargestArmy(state: CatanState, justPlayed: PlayerId): Cata
 export function checkWin(state: CatanState): CatanState {
   if (state.turn.phase === 'setup' || state.turn.phase === 'ended') return state
   const p = state.turn.current
-  if (victoryPoints(state, p, { includeHidden: true }) >= VP_TARGET)
+  if (victoryPoints(state, p, { includeHidden: true }) >= (state.targetVp ?? VP_TARGET))
     return { ...state, winner: p, turn: { ...state.turn, phase: 'ended' } }
   return state
 }

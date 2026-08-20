@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { updateLargestArmy, victoryPoints, type CatanState } from '../../src/index'
-import { apply, expectError, inMain, setupComplete, withResources } from './helpers'
+import { createCatanGame, createRng, updateLargestArmy, victoryPoints, type CatanState } from '../../src/index'
+import { apply, die, expectError, inMain, setupComplete, stubRng, withResources } from './helpers'
 
 /** Test surgery helpers. */
 function withKnights(state: CatanState, player: number, n: number): CatanState {
@@ -41,6 +41,30 @@ describe('victoryPoints', () => {
     expect(victoryPoints(state, 0)).toBe(8)
     expect(victoryPoints(state, 0, { includeHidden: true })).toBe(10)
     expect(victoryPoints(state, 1)).toBe(2)
+  })
+})
+
+describe('targetVp', () => {
+  it('createCatanGame threads a custom targetVp into the state', () => {
+    const state = createCatanGame({ playerCount: 3, targetVp: 6 }, createRng(1))
+    expect(state.targetVp).toBe(6)
+  })
+
+  it('the win fires at a custom targetVp on the current player intent', () => {
+    // 2 cities (4) + longest road (2) = 6 VP for player 0
+    let state: CatanState = { ...setupComplete(), targetVp: 6 }
+    state = withCities(state, 0)
+    state = withAward(state, 'longestRoad', 0)
+    const rolled = apply(state, { type: 'rollDice', player: 0 }, stubRng([die(1), die(2)]))
+    expect(rolled.winner).toBe(0)
+  })
+
+  it('defaults to the standard 10 when targetVp is absent', () => {
+    let state = setupComplete()
+    state = withCities(state, 0)
+    state = withAward(state, 'longestRoad', 0) // 6 VP — short of 10
+    const rolled = apply(state, { type: 'rollDice', player: 0 }, stubRng([die(1), die(2)]))
+    expect(rolled.winner).toBeNull()
   })
 })
 

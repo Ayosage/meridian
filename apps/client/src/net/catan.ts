@@ -36,21 +36,26 @@ export function getCatanRoom(): Room<CatanLobbyClientState> | null {
 }
 
 /**
- * Optional ?seed= query param, forwarded to room creation options so a later
- * task's E2E suite can spin up deterministic boards/dice.
+ * Optional numeric query params forwarded to room creation options so the E2E
+ * suite can spin up deterministic (?seed=) and fast-finishing (?vp=) matches.
  */
-function seedFromUrl(): number | undefined {
+function numberParam(name: string): number | undefined {
   if (typeof window === 'undefined') return undefined
-  const raw = new URLSearchParams(window.location.search).get('seed')
+  const raw = new URLSearchParams(window.location.search).get(name)
   if (raw === null) return undefined
-  const seed = Number(raw)
-  return Number.isFinite(seed) ? seed : undefined
+  const value = Number(raw)
+  return Number.isFinite(value) ? value : undefined
 }
 
 export async function createCatanMatch(players: 3 | 4): Promise<void> {
   useCatanStore.getState().setStatus('connecting')
-  const seed = seedFromUrl()
-  const options = seed === undefined ? { players } : { players, seed }
+  const seed = numberParam('seed')
+  const targetVp = numberParam('vp')
+  const options = {
+    players,
+    ...(seed !== undefined ? { seed } : {}),
+    ...(targetVp !== undefined ? { targetVp } : {}),
+  }
   enterRoom(await getClient().create<CatanLobbyClientState>('catan', options))
 }
 
