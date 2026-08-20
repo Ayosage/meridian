@@ -14,6 +14,16 @@ import {
   type ResourceCount,
   type VertexId,
 } from '@meridian/rules'
+import {
+  bankTradeIntent,
+  counterTradeIntent,
+  decrementSelection,
+  emptySelection,
+  incomingOfferFor,
+  incrementSelection,
+  offerTradeIntent,
+  type ResourceSelection,
+} from './tradeLogic'
 
 export type CatanStatus =
   | 'idle'
@@ -211,6 +221,18 @@ interface CatanState {
   connected: boolean[]
   targetPlayers: number | null
 
+  /** TradePanel: open/closed, and which tab (player offer vs. bank) is active. */
+  tradeOpen: boolean
+  tradeTab: 'players' | 'bank'
+  /** Staged composer selections for a new player-to-player offer. */
+  tradeGive: ResourceSelection
+  tradeGet: ResourceSelection
+  /** Staged bank-trade picks (single resource each side). */
+  bankGive: Resource | null
+  bankGet: Resource | null
+  /** Staged counter-offer draft while responding to an incoming trade; null outside that flow. */
+  counterDraft: { give: ResourceSelection; get: ResourceSelection } | null
+
   setStatus(status: CatanStatus): void
   setJoined(roomId: string): void
   setSeat(seat: number): void
@@ -241,6 +263,44 @@ interface CatanState {
   submitDiscard(send: SendIntent): void
   /** StealChooser: victim-seat click — sends moveRobber with that stealFrom. No-op outside steal mode. */
   clickStealVictim(victim: number, send: SendIntent): void
+
+  /** TradePanel: open/close the panel; opening resets composer staging. No-op while a forced mode is active. */
+  toggleTrade(): void
+  setTradeTab(tab: 'players' | 'bank'): void
+  /** Composer: +1 to the offer's give side, capped at the hand count. */
+  incTradeGive(r: Resource): void
+  /** Composer: -1 to the offer's give side, floored at 0. */
+  decTradeGive(r: Resource): void
+  /** Composer: +1 to the offer's get side, uncapped. */
+  incTradeGet(r: Resource): void
+  /** Composer: -1 to the offer's get side, floored at 0. */
+  decTradeGet(r: Resource): void
+  setBankGive(r: Resource | null): void
+  setBankGet(r: Resource | null): void
+  /** Composer: sends offerTrade from the staged selections; no-op if either side is empty. */
+  submitOffer(send: SendIntent): void
+  /** Bank tab: sends bankTrade from the staged picks; no-op if the trade isn't affordable. */
+  submitBankTrade(send: SendIntent): void
+  /** Responder: accept/reject the open offer as-is. */
+  respondToOffer(response: 'accept' | 'reject', send: SendIntent): void
+  /** Responder: seed a counter-offer draft from the open offer, clamped to the responder's hand. */
+  startCounter(): void
+  /** Counter draft: +1 to the give side, capped at the hand count. */
+  incCounterGive(r: Resource): void
+  /** Counter draft: -1 to the give side, floored at 0. */
+  decCounterGive(r: Resource): void
+  /** Counter draft: +1 to the get side, uncapped. */
+  incCounterGet(r: Resource): void
+  /** Counter draft: -1 to the get side, floored at 0. */
+  decCounterGet(r: Resource): void
+  /** Responder: sends the counter draft as a respondTrade counter, then clears it. */
+  submitCounter(send: SendIntent): void
+  /** Responder: discard the counter draft without sending. */
+  cancelCounter(): void
+  /** Offerer: confirm-trade with a specific responder who accepted/countered. */
+  confirmTradeWith(partner: number, send: SendIntent): void
+  /** Offerer: cancel the open offer outright. */
+  cancelOpenTrade(send: SendIntent): void
 }
 
 const INITIAL = {
@@ -255,6 +315,13 @@ const INITIAL = {
   seats: [] as string[],
   connected: [] as boolean[],
   targetPlayers: null as number | null,
+  tradeOpen: false,
+  tradeTab: 'players' as const,
+  tradeGive: emptySelection(),
+  tradeGet: emptySelection(),
+  bankGive: null as Resource | null,
+  bankGet: null as Resource | null,
+  counterDraft: null as { give: ResourceSelection; get: ResourceSelection } | null,
 }
 
 export const useCatanStore = create<CatanState>((set, get) => ({
@@ -273,11 +340,21 @@ export const useCatanStore = create<CatanState>((set, get) => ({
     // already in it (subsequent snapshots as other seats discard too) the
     // player's in-progress selection must survive.
     const enteringDiscard = nextMode.kind === 'discard' && mode.kind !== 'discard'
+    const hadOpenTrade = view?.turn.openTrade != null
+    const hasOpenTrade = payload.view.turn.openTrade != null
+    const tradeResolved = hadOpenTrade && !hasOpenTrade
+    // Our own offer just posted: the review panel replaces the composer, so the
+    // staged selections are done with; a resolved/cancelled trade clears drafts.
+    const ownOfferPosted = !hadOpenTrade && hasOpenTrade && payload.view.turn.current === seat
+    const resetStaging = tradeResolved || ownOfferPosted
     set({
       view: payload.view,
       mode: nextMode,
       status: payload.view.winner !== null ? 'ended' : 'playing',
       discardSelection: enteringDiscard ? EMPTY_DISCARD : discardSelection,
+      counterDraft: tradeResolved ? null : get().counterDraft,
+      tradeGive: resetStaging ? emptySelection() : get().tradeGive,
+      tradeGet: resetStaging ? emptySelection() : get().tradeGet,
     })
   },
 
@@ -364,4 +441,78 @@ export const useCatanStore = create<CatanState>((set, get) => ({
     if (!mode.victims.includes(victim)) return
     send({ type: 'moveRobber', hex: mode.hex, stealFrom: victim })
   },
+
+  toggleTrade: () => {
+    const { tradeOpen, mode } = get()
+    if (STALE_IF_UNFORCED.has(mode.kind)) return // never over a forced discard/robber/steal
+    set(
+      tradeOpen
+        ? { tradeOpen: false }
+        : { tradeOpen: true, tradeTab: 'players', tradeGive: emptySelection(), tradeGet: emptySelection(), bankGive: null, bankGet: null },
+    )
+  },
+  setTradeTab: (tradeTab) => set({ tradeTab }),
+  incTradeGive: (r) => {
+    const { view, tradeGive } = get()
+    if (view === null) return
+    set({ tradeGive: incrementSelection(tradeGive, r, view.you.resources[r]) })
+  },
+  decTradeGive: (r) => set({ tradeGive: decrementSelection(get().tradeGive, r) }),
+  incTradeGet: (r) => set({ tradeGet: incrementSelection(get().tradeGet, r) }),
+  decTradeGet: (r) => set({ tradeGet: decrementSelection(get().tradeGet, r) }),
+  setBankGive: (bankGive) => set({ bankGive }),
+  setBankGet: (bankGet) => set({ bankGet }),
+  submitOffer: (send) => {
+    const intent = offerTradeIntent(get().tradeGive, get().tradeGet)
+    if (intent) send(intent)
+  },
+  submitBankTrade: (send) => {
+    const { view, seat, bankGive, bankGet } = get()
+    if (view === null || seat === null) return
+    const intent = bankTradeIntent(view, seat, bankGive, bankGet)
+    if (intent) send(intent)
+  },
+  respondToOffer: (response, send) => send({ type: 'respondTrade', response }),
+  startCounter: () => {
+    const { view, seat } = get()
+    if (view === null || seat === null) return
+    const offer = incomingOfferFor(view, seat)
+    if (!offer) return
+    const give = emptySelection()
+    for (const r of RESOURCES) give[r] = Math.min(offer.youGive[r] ?? 0, view.you.resources[r])
+    const getSel = emptySelection()
+    for (const r of RESOURCES) getSel[r] = offer.youReceive[r] ?? 0
+    set({ counterDraft: { give, get: getSel } })
+  },
+  incCounterGive: (r) => {
+    const { view, counterDraft } = get()
+    if (view === null || counterDraft === null) return
+    set({ counterDraft: { ...counterDraft, give: incrementSelection(counterDraft.give, r, view.you.resources[r]) } })
+  },
+  decCounterGive: (r) => {
+    const { counterDraft } = get()
+    if (counterDraft === null) return
+    set({ counterDraft: { ...counterDraft, give: decrementSelection(counterDraft.give, r) } })
+  },
+  incCounterGet: (r) => {
+    const { counterDraft } = get()
+    if (counterDraft === null) return
+    set({ counterDraft: { ...counterDraft, get: incrementSelection(counterDraft.get, r) } })
+  },
+  decCounterGet: (r) => {
+    const { counterDraft } = get()
+    if (counterDraft === null) return
+    set({ counterDraft: { ...counterDraft, get: decrementSelection(counterDraft.get, r) } })
+  },
+  submitCounter: (send) => {
+    const { counterDraft } = get()
+    if (counterDraft === null) return
+    const intent = counterTradeIntent(counterDraft.give, counterDraft.get)
+    if (!intent) return
+    send(intent)
+    set({ counterDraft: null })
+  },
+  cancelCounter: () => set({ counterDraft: null }),
+  confirmTradeWith: (partner, send) => send({ type: 'confirmTrade', partner }),
+  cancelOpenTrade: (send) => send({ type: 'cancelTrade' }),
 }))
