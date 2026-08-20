@@ -1,5 +1,7 @@
 import { COSTS, hasResources } from '@meridian/rules'
 import { useCatanStore } from '../scene/catan/catanStore'
+import { canBuyDevCard } from '../scene/catan/devCardLogic'
+import { sendCatanIntent } from '../net/catan'
 // Only App.tsx imports hud.css today; BuildBar also mounts standalone on the
 // /board dev route (BoardPreview), so it owns its own stylesheet dependency
 // rather than relying on whichever entry point happens to import it first.
@@ -21,6 +23,8 @@ export function BuildBar() {
   const seat = useCatanStore((s) => s.seat)
   const mode = useCatanStore((s) => s.mode)
   const toggleBuildMode = useCatanStore((s) => s.toggleBuildMode)
+  const tradeOpen = useCatanStore((s) => s.tradeOpen)
+  const toggleTrade = useCatanStore((s) => s.toggleTrade)
 
   const canBuild = (cost: keyof typeof COSTS): boolean =>
     view !== null &&
@@ -46,6 +50,24 @@ export function BuildBar() {
           </button>
         )
       })}
+      <button
+        type="button"
+        data-testid="build-dev"
+        className="build-bar-btn"
+        disabled={view === null || seat === null || !canBuyDevCard(view, seat)}
+        onClick={() => sendCatanIntent({ type: 'buyDevCard' })}
+      >
+        Dev Card
+      </button>
+      <button
+        type="button"
+        data-testid="trade-toggle"
+        className={tradeOpen ? 'build-bar-btn active' : 'build-bar-btn'}
+        disabled={view === null || seat === null || view.turn.phase !== 'main' || view.turn.current !== seat}
+        onClick={toggleTrade}
+      >
+        Trade
+      </button>
     </div>
   )
 }

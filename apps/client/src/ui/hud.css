@@ -248,3 +248,159 @@
 .opponent-name { font-weight: 700; display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
 .opponent-stats { display: flex; gap: 8px; opacity: 0.85; font-variant-numeric: tabular-nums; }
 .win-overlay .win-vp-cards { text-align: center; font-size: 13px; opacity: 0.85; }
+
+/* --- phase 5: trade + dev cards --- */
+.catan-hud .roll-button { right: 132px; } /* was 120px: touched END TURN's left edge */
+.trade-panel {
+  position: fixed;
+  bottom: 74px;
+  right: 18px;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(12, 14, 20, 0.92);
+  border: 1px solid rgba(127, 200, 232, 0.25);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.trade-panel-header { display: flex; align-items: center; gap: 8px; }
+.trade-panel-header .title { font-size: 14px; font-weight: 700; flex: 1; }
+.trade-tabs { display: flex; gap: 4px; }
+.trade-tab {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: #20222b;
+  color: #e8e8f0;
+  cursor: pointer;
+}
+.trade-tab.active { border-color: #7fc8e8; background: #2c6e8f; color: #fff; }
+.section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.65; }
+.res-stepper-row { display: flex; gap: 6px; justify-content: center; }
+.res-stepper { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 52px; }
+.res-stepper.depleted { opacity: 0.35; }
+.res-stepper .res-name { font-size: 11px; text-transform: capitalize; opacity: 0.75; display: flex; align-items: center; gap: 4px; }
+.res-stepper .res-count { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.res-stepper .steppers { display: flex; gap: 4px; }
+.mini-btn {
+  width: 22px;
+  height: 22px;
+  font-size: 13px;
+  line-height: 1;
+  border: 1px solid rgba(127, 200, 232, 0.35);
+  border-radius: 6px;
+  background: #20222b;
+  color: #e8e8f0;
+  cursor: pointer;
+}
+.mini-btn:disabled { opacity: 0.35; cursor: default; }
+.res-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.res-wood { background: #6a9a58; }
+.res-brick { background: #b0603f; }
+.res-sheep { background: #a8c67a; }
+.res-wheat { background: #d9b95c; }
+.res-ore { background: #8a94a6; }
+.res-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #20222b;
+  border: 1px solid rgba(127, 200, 232, 0.2);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.offer-banner {
+  position: fixed;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(12, 14, 20, 0.92);
+  border: 1px solid rgba(127, 200, 232, 0.25);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.offer-banner .title { font-size: 14px; font-weight: 700; text-align: center; }
+.offer-terms { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.offer-side { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.offer-side-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.6; }
+.offer-actions { display: flex; gap: 8px; }
+.offer-actions button { flex: 1; padding: 9px 0; font-size: 13px; font-family: inherit; border-radius: 6px; cursor: pointer; }
+.accept-btn { border: 0; background: #4a8f5c; color: #fff; }
+.counter-btn { border: 1px solid rgba(127, 200, 232, 0.35); background: #20222b; color: #e8e8f0; }
+.decline-btn { border: 1px solid rgba(255, 128, 128, 0.4); background: #20222b; color: #ff8080; }
+.response-rows { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(232, 232, 240, 0.08); padding-top: 10px; }
+.response-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.response-name { min-width: 64px; font-weight: 600; }
+.response-status { flex: 1; font-size: 12px; }
+.response-status.accept { color: #4a8f5c; }
+.response-status.reject { color: #ff8080; }
+.response-status.counter { color: #f4d97a; }
+.response-status.waiting { opacity: 0.6; }
+.confirm-btn { padding: 6px 12px; font-size: 12px; font-family: inherit; border: 0; border-radius: 6px; background: #2c6e8f; color: #fff; cursor: pointer; }
+.dev-strip {
+  position: fixed;
+  bottom: 138px;
+  left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(12, 14, 20, 0.8);
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.dev-strip-header { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.65; }
+.dev-cards-row { display: flex; gap: 8px; }
+.dev-card-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 86px;
+  padding: 8px;
+  background: #20222b;
+  border: 1px solid rgba(127, 200, 232, 0.2);
+  border-radius: 6px;
+}
+.dev-card-name { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+.dev-card-name span { flex: 1; }
+.dev-card-count { font-size: 11px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+.dev-card-note { font-size: 10px; opacity: 0.6; }
+.dev-play-btn { padding: 4px 8px; font-size: 11px; font-family: inherit; border: 0; border-radius: 6px; background: #2c6e8f; color: #fff; cursor: pointer; }
+.dev-play-btn:disabled { opacity: 0.4; cursor: default; }
+.badge-new {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #6b5b1f;
+  color: #f4d97a;
+}
+.bank-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  min-width: 52px;
+  font-family: inherit;
+  border: 1px solid rgba(127, 200, 232, 0.2);
+  border-radius: 6px;
+  background: #20222b;
+  color: #e8e8f0;
+  cursor: pointer;
+}
+.bank-chip.selected { border-color: #7fc8e8; background: #2c6e8f; color: #fff; }
+.bank-chip:disabled { opacity: 0.35; cursor: default; }
+.bank-chip .res-name { font-size: 11px; text-transform: capitalize; display: flex; align-items: center; gap: 4px; }
+.bank-rate { font-size: 10px; opacity: 0.75; font-variant-numeric: tabular-nums; }
+.trade-footnote { font-size: 11px; opacity: 0.6; text-align: center; }
