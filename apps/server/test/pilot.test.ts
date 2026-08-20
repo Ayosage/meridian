@@ -15,6 +15,7 @@ import {
   type CatanState,
   type ResourceCount,
 } from '@meridian/rules'
+import type { TradeOffer } from '@meridian/rules'
 import { pilotIntent } from '../src/pilot'
 
 function setupComplete(): CatanState {
@@ -108,5 +109,63 @@ describe('pilotIntent', () => {
       state = mustApply(state, intent!, rng)
     }
     expect(state.turn.phase).toBe('preRoll')
+  })
+})
+
+/** Test surgery: an open trade addressed to a pilot seat, with that seat's hand set exactly. */
+function stateWithOpenTrade(opts: {
+  current: number
+  openTrade: TradeOffer
+  pilotSeat: number
+  pilotResources: ResourceCount
+}): CatanState {
+  const state = setupComplete()
+  const players = state.players.map((p, i) =>
+    i === opts.pilotSeat ? { ...p, resources: opts.pilotResources } : p,
+  )
+  return {
+    ...state,
+    players,
+    turn: { ...state.turn, current: opts.current, openTrade: opts.openTrade },
+  }
+}
+
+describe('pilot trade evaluation', () => {
+  it('accepts an offer where it holds the asked resources and gains cards', () => {
+    // offerer (seat 0, current) gives 2 wood, wants 1 ore; pilot seat 1 holds 1 ore
+    const state = stateWithOpenTrade({
+      current: 0,
+      openTrade: { give: { wood: 2 }, get: { ore: 1 }, responses: {} },
+      pilotSeat: 1,
+      pilotResources: { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 1 },
+    })
+    expect(pilotIntent(state, 1, createRng(0))).toEqual({
+      type: 'respondTrade', player: 1, response: 'accept',
+    })
+  })
+
+  it('rejects when it cannot cover the asked side', () => {
+    const state = stateWithOpenTrade({
+      current: 0,
+      openTrade: { give: { wood: 2 }, get: { ore: 1 }, responses: {} },
+      pilotSeat: 1,
+      pilotResources: { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 },
+    })
+    expect(pilotIntent(state, 1, createRng(0))).toEqual({
+      type: 'respondTrade', player: 1, response: 'reject',
+    })
+  })
+
+  it('rejects a card-losing trade even when affordable', () => {
+    // gives 2 ore for 1 wood: -1 card net
+    const state = stateWithOpenTrade({
+      current: 0,
+      openTrade: { give: { wood: 1 }, get: { ore: 2 }, responses: {} },
+      pilotSeat: 1,
+      pilotResources: { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 2 },
+    })
+    expect(pilotIntent(state, 1, createRng(0))).toEqual({
+      type: 'respondTrade', player: 1, response: 'reject',
+    })
   })
 })

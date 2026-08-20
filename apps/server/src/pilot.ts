@@ -1,5 +1,6 @@
 import {
   coordKey,
+  hasResources,
   legalSettlementVertices,
   pick,
   RESOURCES,
@@ -16,7 +17,8 @@ import {
  * Caretaker pilot (server design spec §3): performs ONLY mandatory actions
  * for a seat with no connected human, so the game never stalls. It never
  * builds, buys or plays dev cards, or offers trades — a piloted seat cannot
- * win or reshape the board. Returns null when nothing is mandatory.
+ * win or reshape the board. It accepts clearly favorable trade offers.
+ * Returns null when nothing is mandatory.
  */
 export function pilotIntent(state: CatanState, seat: PlayerId, rng: Rng): CatanIntent | null {
   if (state.winner !== null || state.turn.phase === 'ended') return null
@@ -28,7 +30,15 @@ export function pilotIntent(state: CatanState, seat: PlayerId, rng: Rng): CatanI
     return { type: 'discard', player: seat, resources: greedyDiscard(state, seat, owed) }
   }
   if (t.openTrade && t.current !== seat && t.openTrade.responses[seat] === undefined) {
-    return { type: 'respondTrade', player: seat, response: 'reject' }
+    // Evaluate instead of auto-rejecting (phase-5 spec §6): the responder
+    // gives offer.get and receives offer.give — accept only a trade it can
+    // cover that never loses net cards. Still no offers/counters: a piloted
+    // seat stays a caretaker, not a competitor.
+    const offer = t.openTrade
+    const favorable =
+      hasResources(state.players[seat]!.resources, offer.get) &&
+      totalResources(offer.give) >= totalResources(offer.get)
+    return { type: 'respondTrade', player: seat, response: favorable ? 'accept' : 'reject' }
   }
 
   if (t.current !== seat) return null
