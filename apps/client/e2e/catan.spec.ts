@@ -42,8 +42,16 @@ type Target = { kind: 'vertex' | 'edge' | 'hex'; id: string; x: number; y: numbe
 /** Click the first legal canvas target for the current mode (hexes — robber picks — take priority). */
 async function clickFirstLegalTarget(page: Page): Promise<{ mode: string; targets: Target[] }> {
   const state = await page.evaluate(() => window.__meridianDebug!.legalTargetsOnScreen!())
-  const t = state.targets.find((x) => x.kind === 'hex') ?? state.targets[0]
-  if (t) await page.mouse.click(t.x, t.y)
+  const ordered = [...state.targets].sort((a, b) => Number(b.kind === 'hex') - Number(a.kind === 'hex'))
+  if (ordered.length > 0) {
+    const clearIdx = await page.evaluate(
+      (points: { x: number; y: number }[]) =>
+        points.findIndex((p) => document.elementFromPoint(p.x, p.y) instanceof HTMLCanvasElement),
+      ordered.map((t) => ({ x: t.x, y: t.y })),
+    )
+    const t = ordered[clearIdx >= 0 ? clearIdx : 0]!
+    await page.mouse.click(t.x, t.y)
+  }
   return state
 }
 
