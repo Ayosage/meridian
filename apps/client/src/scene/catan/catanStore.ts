@@ -15,6 +15,7 @@ import {
   type VertexId,
 } from '@meridian/rules'
 import {
+  devHand,
   legalRoadBuildingEdges,
   monopolyIntent,
   resolveRoadBuildingClick,
@@ -565,6 +566,7 @@ export const useCatanStore = create<CatanState>((set, get) => ({
     const { view, seat, mode } = get()
     if (view === null || seat === null) return
     if (STALE_IF_UNFORCED.has(mode.kind)) return
+    if (!devHand(view, seat).some((g) => g.card === 'roadBuilding' && g.playable)) return
     set({ mode: { kind: 'roadBuilding', staged: [] }, tradeOpen: false })
   },
   openDevModal: (devModal) => set({ devModal, plentySelection: emptySelection() }),

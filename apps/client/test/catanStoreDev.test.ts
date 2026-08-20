@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createCatanGame, createRng, redactCatanState, standardTopology, type CatanClientState } from '@meridian/rules'
+import {
+  createCatanGame,
+  createRng,
+  redactCatanState,
+  standardTopology,
+  type CatanClientState,
+  type OwnedDevCard,
+} from '@meridian/rules'
 import { deriveMode, legalEdgesForMode, useCatanStore, type Mode } from '../src/scene/catan/catanStore'
 
 function makeView(overrides: {
@@ -8,6 +15,8 @@ function makeView(overrides: {
   turn?: Partial<CatanClientState['turn']>
   buildings?: CatanClientState['buildings']
   roads?: CatanClientState['roads']
+  devCards?: OwnedDevCard[]
+  bank?: Partial<CatanClientState['bank']>
 } = {}): CatanClientState {
   const state = createCatanGame({ playerCount: 4 }, createRng(1))
   const base = redactCatanState(state, overrides.seat ?? 0)
@@ -17,8 +26,15 @@ function makeView(overrides: {
     buildings: overrides.buildings ?? base.buildings,
     roads: overrides.roads ?? base.roads,
     turn: { ...base.turn, ...overrides.turn },
+    bank: { ...base.bank, ...overrides.bank },
+    you: {
+      ...base.you,
+      devCards: overrides.devCards ?? base.you.devCards,
+    },
   }
 }
+
+const ROAD_BUILDING_CARD: OwnedDevCard = { card: 'roadBuilding', boughtOnTurn: 1 }
 
 const MAIN = { current: 0, phase: 'main' as const, number: 2 }
 
@@ -30,6 +46,13 @@ describe('roadBuilding mode lifecycle', () => {
     expect(deriveMode(makeView({ turn: { ...MAIN, current: 1 } }), 0, rb)).toEqual({ kind: 'idle' })
     expect(deriveMode(makeView({ turn: { ...MAIN, phase: 'robber' } }), 0, rb)).toEqual({ kind: 'robber' })
     expect(deriveMode(makeView({ turn: MAIN }), 0, rb)).toEqual(rb) // still our main turn: survives
+  })
+
+  it('deriveMode clears roadBuilding when still our turn but phase leaves main', () => {
+    // Distinct from the 'robber' case above: this hits the roadBuilding-specific
+    // clause directly rather than returning early at the robber branch.
+    const rb: Mode = { kind: 'roadBuilding', staged: [] }
+    expect(deriveMode(makeView({ turn: { ...MAIN, phase: 'ended' } }), 0, rb)).toEqual({ kind: 'idle' })
   })
 
   it('Esc cancels roadBuilding', () => {
@@ -72,6 +95,40 @@ describe('roadBuilding mode lifecycle', () => {
   })
 })
 
+describe('startRoadBuilding', () => {
+  it('enters roadBuilding mode and closes the trade panel when the seat has a playable card', () => {
+    useCatanStore.getState().setSeat(0)
+    useCatanStore.getState().ingestSnapshot({
+      seq: 1,
+      view: makeView({ seq: 1, turn: MAIN, devCards: [ROAD_BUILDING_CARD] }),
+    })
+    useCatanStore.getState().toggleTrade()
+    expect(useCatanStore.getState().tradeOpen).toBe(true)
+
+    useCatanStore.getState().startRoadBuilding()
+    expect(useCatanStore.getState().mode).toEqual({ kind: 'roadBuilding', staged: [] })
+    expect(useCatanStore.getState().tradeOpen).toBe(false)
+  })
+
+  it('no-ops without a playable roadBuilding card in hand', () => {
+    useCatanStore.getState().setSeat(0)
+    useCatanStore.getState().ingestSnapshot({ seq: 1, view: makeView({ seq: 1, turn: MAIN, devCards: [] }) })
+    useCatanStore.getState().startRoadBuilding()
+    expect(useCatanStore.getState().mode).toEqual({ kind: 'idle' })
+  })
+
+  it('no-ops while a forced mode (discard) is active', () => {
+    useCatanStore.getState().setSeat(0)
+    useCatanStore.getState().ingestSnapshot({
+      seq: 1,
+      view: makeView({ seq: 1, turn: { current: 0, phase: 'main', number: 2, pendingDiscards: { 0: 3 } }, devCards: [ROAD_BUILDING_CARD] }),
+    })
+    expect(useCatanStore.getState().mode).toEqual({ kind: 'discard' })
+    useCatanStore.getState().startRoadBuilding()
+    expect(useCatanStore.getState().mode).toEqual({ kind: 'discard' })
+  })
+})
+
 describe('dev modals', () => {
   it('plenty selection caps the total at 2 and submits via the intent builder', () => {
     useCatanStore.getState().setSeat(0)
@@ -84,6 +141,30 @@ describe('dev modals', () => {
     const send = vi.fn()
     useCatanStore.getState().submitPlenty(send)
     expect(send).toHaveBeenCalledWith({ type: 'playDevCard', card: 'yearOfPlenty', take: ['wheat', 'ore'] })
+    expect(useCatanStore.getState().devModal).toBeNull()
+  })
+
+  it('incPlenty refuses a pick on a resource the bank has none of, even under the total cap', () => {
+    useCatanStore.getState().setSeat(0)
+    useCatanStore.getState().ingestSnapshot({
+      seq: 1,
+      view: makeView({ seq: 1, turn: MAIN, bank: { ore: 0 } }),
+    })
+    useCatanStore.getState().openDevModal('yearOfPlenty')
+    useCatanStore.getState().incPlenty('ore')
+    expect(useCatanStore.getState().plentySelection.ore).toBe(0)
+  })
+
+  it('decPlenty floors at 0', () => {
+    useCatanStore.getState().openDevModal('yearOfPlenty')
+    useCatanStore.getState().decPlenty('wheat')
+    expect(useCatanStore.getState().plentySelection.wheat).toBe(0)
+  })
+
+  it('closeDevModal clears devModal', () => {
+    useCatanStore.getState().openDevModal('monopoly')
+    expect(useCatanStore.getState().devModal).toBe('monopoly')
+    useCatanStore.getState().closeDevModal()
     expect(useCatanStore.getState().devModal).toBeNull()
   })
 
