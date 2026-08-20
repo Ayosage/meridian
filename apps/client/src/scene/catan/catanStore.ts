@@ -36,8 +36,8 @@ export interface CatanMatchResult {
  */
 export type Mode =
   | { kind: 'idle' }
-  | { kind: 'placeSettlement' }
-  | { kind: 'placeRoad' }
+  | { kind: 'placeSettlement'; forced?: true }
+  | { kind: 'placeRoad'; forced?: true }
   | { kind: 'placeCity' }
   | { kind: 'discard' }
   | { kind: 'robber' }
@@ -55,7 +55,9 @@ export function deriveMode(view: CatanClientState, seat: number | null, current:
   if (seat === null) return current
   const { turn } = view
   if (turn.phase === 'setup' && turn.current === seat && turn.setup) {
-    return turn.setup.expect === 'settlement' ? { kind: 'placeSettlement' } : { kind: 'placeRoad' }
+    return turn.setup.expect === 'settlement'
+      ? { kind: 'placeSettlement', forced: true }
+      : { kind: 'placeRoad', forced: true }
   }
   if ((turn.pendingDiscards[seat] ?? 0) > 0) return { kind: 'discard' }
   if (turn.phase === 'robber' && turn.current === seat) {
@@ -64,8 +66,13 @@ export function deriveMode(view: CatanClientState, seat: number | null, current:
   // Nothing forced right now. discard/robber/steal only ever arise from a
   // forced condition above, so once it no longer holds they're stale.
   // Placement modes may be a voluntary local pick and survive unrelated
-  // snapshots (e.g. an opponent's dice roll shouldn't cancel your build UI).
-  return STALE_IF_UNFORCED.has(current.kind) ? IDLE_MODE : current
+  // snapshots (e.g. an opponent's dice roll shouldn't cancel your build UI) —
+  // but a placement mode this state machine itself forced (setup) is just as
+  // stale once its condition ends: without the check it would outlive our
+  // setup turn as a phantom "voluntary" build mode with no legal targets.
+  if (STALE_IF_UNFORCED.has(current.kind)) return IDLE_MODE
+  if ((current.kind === 'placeSettlement' || current.kind === 'placeRoad') && current.forced) return IDLE_MODE
+  return current
 }
 
 /** True while `deriveMode` would force *some* mode on this seat right now (setup/discard/robber). */

@@ -24,12 +24,26 @@ const IDLE: Mode = { kind: 'idle' }
 describe('deriveMode (pure)', () => {
   it('forces placeSettlement when setup expects a settlement on our turn', () => {
     const view = makeView({ turn: { current: 0, phase: 'setup', setup: { expect: 'settlement', lastSettlement: null } } })
-    expect(deriveMode(view, 0, IDLE)).toEqual({ kind: 'placeSettlement' })
+    expect(deriveMode(view, 0, IDLE)).toEqual({ kind: 'placeSettlement', forced: true })
   })
 
   it('forces placeRoad when setup expects a road on our turn', () => {
     const view = makeView({ turn: { current: 0, phase: 'setup', setup: { expect: 'road', lastSettlement: 'v' } } })
-    expect(deriveMode(view, 0, IDLE)).toEqual({ kind: 'placeRoad' })
+    expect(deriveMode(view, 0, IDLE)).toEqual({ kind: 'placeRoad', forced: true })
+  })
+
+  it('drops a forced placement mode once its forcing condition ends (setup passes to an opponent)', () => {
+    // Regression: after our setup road lands, the next snapshot is the
+    // opponent's setup turn — the leftover forced placeRoad must clear, not
+    // masquerade as a voluntary build pick (it deadlocked the E2E driver).
+    const view = makeView({ turn: { current: 1, phase: 'setup', setup: { expect: 'settlement', lastSettlement: null } } })
+    expect(deriveMode(view, 0, { kind: 'placeRoad', forced: true })).toEqual(IDLE)
+  })
+
+  it('drops a forced placement mode when setup hands straight into our main turn', () => {
+    // The final setup road flips phase to main on our own turn — same leak.
+    const view = makeView({ turn: { current: 0, phase: 'main' } })
+    expect(deriveMode(view, 0, { kind: 'placeRoad', forced: true })).toEqual(IDLE)
   })
 
   it('does not force setup placement for a seat that is not the current turn', () => {
@@ -115,7 +129,18 @@ describe('useCatanStore', () => {
       turn: { current: 0, phase: 'setup', setup: { expect: 'settlement', lastSettlement: null } },
     })
     useCatanStore.getState().ingestSnapshot({ seq: 1, view })
-    expect(useCatanStore.getState().mode).toEqual({ kind: 'placeSettlement' })
+    expect(useCatanStore.getState().mode).toEqual({ kind: 'placeSettlement', forced: true })
+  })
+
+  it('clears a setup-forced placement mode on the snapshot after the placement lands', () => {
+    useCatanStore.getState().setSeat(0)
+    const during = makeView({ seq: 1, turn: { current: 0, phase: 'setup', setup: { expect: 'road', lastSettlement: 'v' } } })
+    useCatanStore.getState().ingestSnapshot({ seq: 1, view: during })
+    expect(useCatanStore.getState().mode.kind).toBe('placeRoad')
+
+    const after = makeView({ seq: 2, turn: { current: 1, phase: 'setup', setup: { expect: 'settlement', lastSettlement: null } } })
+    useCatanStore.getState().ingestSnapshot({ seq: 2, view: after })
+    expect(useCatanStore.getState().mode).toEqual(IDLE)
   })
 
   it('ingestSnapshot forces discard mode from our pending discard', () => {

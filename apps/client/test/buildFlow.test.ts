@@ -231,12 +231,12 @@ describe('store click handlers (mode transitions + injected send spy)', () => {
     })
     useCatanStore.getState().setSeat(0)
     useCatanStore.getState().ingestSnapshot({ seq: 1, view })
-    expect(useCatanStore.getState().mode).toEqual({ kind: 'placeSettlement' })
+    expect(useCatanStore.getState().mode).toEqual({ kind: 'placeSettlement', forced: true })
 
     useCatanStore.getState().clickVertex(v, (intent) => sent.push(intent))
 
     expect(sent).toEqual([{ type: 'placeSetupSettlement', vertex: v }])
-    expect(useCatanStore.getState().mode).toEqual({ kind: 'placeSettlement' })
+    expect(useCatanStore.getState().mode).toEqual({ kind: 'placeSettlement', forced: true })
   })
 
   it('Esc cancels a voluntary placement mode but never a forced one', () => {
@@ -249,10 +249,10 @@ describe('store click handlers (mode transitions + injected send spy)', () => {
     })
     useCatanStore.getState().setSeat(0)
     useCatanStore.getState().ingestSnapshot({ seq: 1, view })
-    expect(useCatanStore.getState().mode).toEqual({ kind: 'placeSettlement' })
+    expect(useCatanStore.getState().mode).toEqual({ kind: 'placeSettlement', forced: true })
 
     useCatanStore.getState().cancelMode()
-    expect(useCatanStore.getState().mode).toEqual({ kind: 'placeSettlement' })
+    expect(useCatanStore.getState().mode).toEqual({ kind: 'placeSettlement', forced: true })
   })
 
   it('clickHex enters steal mode with victims, or sends moveRobber directly with none', () => {
