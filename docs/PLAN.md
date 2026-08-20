@@ -4,6 +4,15 @@ Rules: work top to bottom, one task per PR, tests pass before PR. The rules
 engine (`packages/rules`) must never import three/react — it runs on the
 server and in unit tests headlessly.
 
+> **2026-08-19 — superseded by the Catan pivot.** Meridian is now a Catan
+> implementation (see `docs/BRIEF.md`); the remaining placeholder-ruleset
+> tasks below stay checked/unchecked as a historical record only. The Catan
+> work is planned per-phase in `docs/superpowers/plans/`:
+> phase 2 engine + phase 3 server (merged), phase 4 board client
+> (`2026-08-19-board-client.md` — lobby, full board scene, pick layer/HUD,
+> 3-browser E2E to a win overlay, perf snapshot in `docs/PERF.md`).
+> Remaining after phase 4: trade/dev-card UX (phase 5), polish (phase 6).
+
 - [ ] Scaffold Turborepo: `apps/client` (Vite + R3F + TypeScript), `apps/server` (Node + ws + TypeScript), `packages/rules`, `packages/protocol` (zod message schemas); Vitest wired in all packages; README
 - [ ] `packages/rules`: core types — `GameState`, `PlayerId`, hex-grid `Coord` with neighbor/distance helpers; property tests on hex math
 - [ ] `packages/rules`: declarative ruleset format (piece defs: movement pattern, capture rule) + placeholder ruleset JSON; loader with zod validation

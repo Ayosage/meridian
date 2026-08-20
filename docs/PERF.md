@@ -89,6 +89,38 @@ to the pre-fix render, and the unchanged triangle count (257,293 in both)
 confirms no geometry was added, removed, or moved — only draw-call count
 changed.
 
+## Phase-4 gate — E2E perf snapshot, /board tiers (2026-08-19)
+
+| Metric | `/board?tier=high` | `/board?tier=low` |
+|---|---|---|
+| FPS (rAF counter, 3s) | 120 | 120 |
+| Draw calls | 432 | 426 |
+| Triangles | 272,527 | 272,521 |
+
+Method: `apps/client/e2e/catan.spec.ts` perf test — headless Chromium with
+GPU via ANGLE-on-Metal (see below), 3s `requestAnimationFrame` sample +
+`catanRenderInfo()`, dpr 1. Both tiers pin the 120Hz vsync cap on this
+machine (M-series), so fps no longer separates them here; the −6 draw calls
+at low tier is the N8AO pass. This finally resolves the beauty-slice open
+gate item ("re-measure high tier in a real browser"): the earlier 49fps was
+indeed un-accelerated rendering, not scene cost.
+
+**Headless WebGL trap:** default headless Chromium renders WebGL on
+SwiftShader (software) — this scene collapses to **3.5fps** high / 4.9fps
+low there, which starved the 3-browser match E2E into timeouts.
+`playwright.config.ts` now passes `--use-angle=metal --enable-gpu`, which
+restores the real GPU in new-headless mode (measured identical to headed).
+
+**Multi-page contention:** even with the GPU, THREE simultaneous boards at
+tier=high saturate the GPU/main threads — every Playwright protocol call
+queues for seconds and the match crawled at ~10 turns per 10 minutes. The
+match E2E therefore joins all pages with `?tier=low` (~27 end-turns/min).
+Single-page interactive play at tier=high is unaffected.
+
+Ledger: draw calls grew 287 → 432 since the Task-8 snapshot above (pick
+layer, legality highlights, and match-time pieces landed in between) —
+over the ~250 budget again; worth a pass to find what un-batched.
+
 Deferred (ledgered, not required for this round): tint-material dispose on
 upgrade (`Pieces.tsx`'s `cloneTinted` clones a material per piece but never
 disposes the previous one if a building is re-tinted, e.g. settlement →

@@ -1,8 +1,10 @@
 # Meridian
 
-Original online board game. Hyper-stylized R3F client, authoritative
-Colyseus server, and a data-driven rules engine — rules are content, not
-code, so new games and expansions are JSON drops.
+Online Catan implementation (original name/art): full base-game rules —
+snake-draft setup, dice production, robber/discards, building, trades, dev
+cards — on a painted-miniature 3D board. Hyper-stylized R3F client,
+authoritative Colyseus server, pure rules engine with per-seat redaction so
+clients only ever see what their player may know.
 
 Docs: `docs/BRIEF.md` (pillars) · `docs/superpowers/specs/` (designs) ·
 `docs/PLAN.md` (roadmap).
@@ -15,11 +17,14 @@ Docs: `docs/BRIEF.md` (pillars) · `docs/superpowers/specs/` (designs) ·
   `src/rulesets/placeholder.json`.
 - `packages/protocol` — zod schemas for client↔server messages.
 - `apps/server` — Colyseus authoritative server: 4-letter join codes,
-  engine-validated intents, schema diff sync, reconnection with forfeit.
-- `apps/client` — Vite + React Three Fiber client: lobby with join codes,
-  instanced shader-styled hex board, click-to-move vs the authoritative
-  server. Two-browser E2E: `pnpm --filter client test:e2e` (requires
-  `playwright install chromium`).
+  engine-validated intents, per-seat redacted snapshots (secrets never leave
+  the server), caretaker pilot for absent seats, reconnect-reclaim until game
+  end.
+- `apps/client` — Vite + React Three Fiber client: Catan lobby (pick player
+  count, share the join code, host early start), painted-miniature 3D board,
+  click-to-build with legality glow, HUD/discard/steal/win UI. E2E
+  (3-browser full match + perf snapshot): `pnpm --filter client test:e2e`
+  (requires `playwright install chromium`).
 
 ## Development
 
@@ -30,7 +35,14 @@ Requirements: Node 20+, pnpm 10.
     pnpm --filter server dev   # ws://localhost:2567
     pnpm --filter client dev   # http://localhost:5173
 
-The server owns all game state: clients send intents, receive state diffs.
+To play: open http://localhost:5173, pick a player count and Create — share
+the 4-letter code; friends Join with it in their own browsers. The match
+starts when every seat fills (or the host starts early; empty seats get the
+caretaker pilot). Dev extras: `/board` renders a full board without a
+server; `?tier=low` drops the ambient-occlusion pass on weak GPUs.
+
+The server owns all game state: clients send intents, receive per-seat
+redacted snapshots.
 
 ## Notes
 
