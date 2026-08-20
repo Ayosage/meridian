@@ -7,6 +7,8 @@ import { BuildBar } from './ui/BuildBar'
 import { DiscardModal } from './ui/DiscardModal'
 import { StealChooser } from './ui/StealChooser'
 import { CatanHud } from './ui/CatanHud'
+import { TradePanel } from './ui/TradePanel'
+import { IncomingOffer } from './ui/IncomingOffer'
 import { reconnectCatan } from './net/catan'
 import './ui/hud.css'
 
@@ -32,6 +34,8 @@ export function App() {
       <CatanScene view={view} />
       <CatanHud />
       <BuildBar />
+      <TradePanel />
+      <IncomingOffer />
       <DiscardModal />
       <StealChooser />
     </>
