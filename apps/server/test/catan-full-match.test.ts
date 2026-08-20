@@ -113,10 +113,11 @@ async function runMatch(players: 3 | 4, seed: number) {
   let snapshots = 0
   let ended: { winner: number } | null = null
 
-  const c0 = await server.sdk.joinOrCreate('catan', { players, seed, pilotDelayMs: 0 })
-  clients.push(c0)
-  for (let i = 1; i < players; i++) clients.push(await server.sdk.joinById(c0.roomId, {}))
-  clients.forEach((c, seat) => {
+  // Attach handlers immediately after EACH join — startGame fires during the
+  // LAST seat's onJoin, and a client whose handlers aren't registered yet
+  // silently drops its initial snapshot (its view stays null and the match
+  // wedges: the old post-all-joins forEach lost this race under load).
+  const attach = (c: ClientRoom, seat: number) => {
     c.onMessage(MSG.SNAPSHOT, (p: CatanSnapshotPayload) => {
       snapshots++
       expectRedactedFor(p, seat) // EVERY snapshot every client receives is leak-checked
@@ -126,11 +127,27 @@ async function runMatch(players: 3 | 4, seed: number) {
       ended = p
     })
     c.onMessage('*', () => undefined)
-  })
+  }
+  const c0 = await server.sdk.joinOrCreate('catan', { players, seed, pilotDelayMs: 0 })
+  clients.push(c0)
+  attach(c0, 0)
+  for (let i = 1; i < players; i++) {
+    const ci = await server.sdk.joinById(c0.roomId, {})
+    clients.push(ci)
+    attach(ci, i)
+  }
 
-  for (let i = 0; i < MAX_INTENTS && !ended; i++) {
+  let intents = 0
+  while (intents < MAX_INTENTS && !ended) {
     await new Promise((r) => setTimeout(r, 2))
     if (ended) break
+    // Barrier: decide only once every seat's view reports the same seq.
+    // Deciding on stale per-seat views reorders intents under machine load,
+    // drifting the seeded rng path off the headless search's replay — the
+    // pinned seeds then stall past MAX_INTENTS with no win.
+    const maxSeq = Math.max(...views.map((v) => v?.seq ?? -1))
+    if (views.some((v) => v === null || v.seq < maxSeq)) continue
+    intents++
     for (let seat = 0; seat < players; seat++) {
       const view = views[seat]
       if (!view) continue
@@ -155,14 +172,15 @@ async function runMatch(players: 3 | 4, seed: number) {
   return ended! as { winner: number }
 }
 
+// Seeds pinned by headless search: 3p seeds 1-2 stall past the cap; seed 3
+// reaches a 10-VP win in 586 intents. The seq barrier in runMatch keeps the
+// ws replay on the search's exact intent order regardless of machine load.
 describe('full matches over ws', () => {
   it('4 players, seed 2: plays to a win, every snapshot redaction-checked', async () => {
     const result = await runMatch(4, 2)
     expect(result.winner).toBeGreaterThanOrEqual(0)
   }, 240_000)
 
-  // seed pinned by headless search: 3p seeds 1-2 stall past the cap; seed 3
-  // reaches a 10-VP win in 586 intents
   it('3 players, seed 3: plays to a win, every snapshot redaction-checked', async () => {
     const result = await runMatch(3, 3)
     expect(result.winner).toBeGreaterThanOrEqual(0)
