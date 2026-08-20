@@ -8,6 +8,18 @@ const SCRATCH = new THREE.Vector3()
 interface MeridianDebug {
   worldToScreen(coordKey: string, y?: number): { x: number; y: number }
   renderInfo(): { drawCalls: number; triangles: number }
+  /** CatanScene-only (scene/catan/CatanScene.tsx's CatanDebugHooks) — perf probe for the Catan board. */
+  catanRenderInfo?(): { calls: number; triangles: number }
+  /**
+   * CatanScene-only — screen-space projection of every legal vertex/edge for
+   * the current mode (robber mode: every non-robbed hex), so an E2E driver
+   * can click the real canvas raycasting path without reimplementing
+   * legality. See CatanDebugHooks's doc comment for the full rationale.
+   */
+  legalTargetsOnScreen?(): {
+    mode: string
+    targets: { kind: 'vertex' | 'edge' | 'hex'; id: string; x: number; y: number }[]
+  }
 }
 
 declare global {

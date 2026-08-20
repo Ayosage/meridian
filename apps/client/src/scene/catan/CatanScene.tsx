@@ -3,9 +3,11 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Bloom, EffectComposer, N8AO, Vignette } from '@react-three/postprocessing'
 import * as THREE from 'three'
-import type { CatanBoard as CatanBoardData, CatanClientState } from '@meridian/rules'
+import { coordKey, type CatanBoard as CatanBoardData, type CatanClientState } from '@meridian/rules'
 import { coordToWorld } from '../layout'
 import { CatanBoard } from './CatanBoard'
+import { edgeWorld, TILE_TOP, vertexWorld } from './catanLayout'
+import { legalEdgesForMode, legalVerticesForMode, useCatanStore } from './catanStore'
 import { Highlights } from './Highlights'
 import { PickLayer } from './PickLayer'
 import { Pieces } from './Pieces'
@@ -50,12 +52,23 @@ function Water({ hexes }: { hexes: CatanBoardData['hexes'] }) {
   )
 }
 
+/** Scratch vector for `project()` below — reused across calls, never per-frame (dev-only, called on demand). */
+const PROJECT_SCRATCH = new THREE.Vector3()
+
+interface ScreenTarget {
+  kind: 'vertex' | 'edge' | 'hex'
+  id: string
+  x: number
+  y: number
+}
+
 /**
- * Dev-only perf probe: `window.__meridianDebug.catanRenderInfo()`, mirroring
- * the src/dev/debugHooks.tsx idiom (useThree -> useEffect -> window global).
- * Kept local rather than extending debugHooks.tsx's `MeridianDebug` type —
- * CatanScene mounts on routes (`/board`, and later the live match) that
- * debugHooks.tsx never does, so the two probes never collide at runtime.
+ * Dev-only perf + E2E probe: `window.__meridianDebug.catanRenderInfo()` and
+ * `.legalTargetsOnScreen()`, mirroring the src/dev/debugHooks.tsx idiom
+ * (useThree -> useEffect -> window global). Kept local rather than extending
+ * debugHooks.tsx's `MeridianDebug` type — CatanScene mounts on routes
+ * (`/board`, and the live match) that debugHooks.tsx never does, so the two
+ * probes never collide at runtime.
  *
  * `gl.info` auto-resets on every internal `renderer.render()` call, and the
  * postprocessing EffectComposer makes several per frame (scene pass + each
@@ -63,9 +76,20 @@ function Water({ hexes }: { hexes: CatanBoardData['hexes'] }) {
  * fullscreen blit). We disable autoReset and reset once ourselves at the
  * start of each frame (lowest priority = runs first) so calls/triangles
  * accumulate across the whole frame before we read them.
+ *
+ * `legalTargetsOnScreen()` projects every vertex/edge legal for the current
+ * mode (robber mode: every non-robbed hex) to CSS pixel coordinates via the
+ * live camera + canvas size, the same world->screen math as
+ * dev/debugHooks.tsx's `worldToScreen` — so an E2E driver can
+ * `page.mouse.click(x, y)` straight onto the real raycasting path without
+ * reimplementing legality (reuses catanStore's legalVerticesForMode/
+ * legalEdgesForMode) or hardcoding board geometry.
  */
 function CatanDebugHooks() {
   const gl = useThree((s) => s.gl)
+  const camera = useThree((s) => s.camera)
+  const size = useThree((s) => s.size)
+
   useEffect(() => {
     gl.info.autoReset = false
     return () => {
@@ -75,22 +99,69 @@ function CatanDebugHooks() {
   useFrame(() => {
     gl.info.reset()
   }, -1000)
+
   useEffect(() => {
+    function project(pos: readonly [number, number, number]): { x: number; y: number } {
+      PROJECT_SCRATCH.set(pos[0], pos[1], pos[2]).project(camera)
+      return {
+        x: ((PROJECT_SCRATCH.x + 1) / 2) * size.width,
+        y: ((1 - PROJECT_SCRATCH.y) / 2) * size.height,
+      }
+    }
+
+    function legalTargetsOnScreen(): { mode: string; targets: ScreenTarget[] } {
+      const { view, seat, mode } = useCatanStore.getState()
+      if (view === null || seat === null) return { mode: mode.kind, targets: [] }
+      const targets: ScreenTarget[] = []
+      for (const id of legalVerticesForMode(view, seat, mode)) {
+        const pos = vertexWorld().get(id)
+        if (pos) targets.push({ kind: 'vertex', id, ...project(pos) })
+      }
+      for (const id of legalEdgesForMode(view, seat, mode)) {
+        const e = edgeWorld().get(id)
+        if (e) targets.push({ kind: 'edge', id, ...project(e.pos) })
+      }
+      if (mode.kind === 'robber') {
+        for (const hex of view.board.hexes) {
+          const key = coordKey(hex.coord)
+          if (key === view.board.robber) continue
+          const [x, , z] = coordToWorld(hex.coord)
+          targets.push({ kind: 'hex', id: key, ...project([x, TILE_TOP, z]) })
+        }
+      }
+      return { mode: mode.kind, targets }
+    }
+
     const w = window as unknown as { __meridianDebug?: Record<string, unknown> }
     w.__meridianDebug = {
       ...w.__meridianDebug,
       catanRenderInfo: () => ({ calls: gl.info.render.calls, triangles: gl.info.render.triangles }),
+      legalTargetsOnScreen,
     }
     return () => {
-      if (w.__meridianDebug) delete w.__meridianDebug['catanRenderInfo']
+      if (w.__meridianDebug) {
+        delete w.__meridianDebug['catanRenderInfo']
+        delete w.__meridianDebug['legalTargetsOnScreen']
+      }
     }
-  }, [gl])
+  }, [gl, camera, size])
+
   return null
+}
+
+/**
+ * `?tier=low` drops N8AO (the entire high/low fps gap per docs/PERF.md's
+ * beauty-slice measurement) — same param + fallback as dev/slice/SliceScene.tsx.
+ */
+function qualityTier(): 'high' | 'low' {
+  if (typeof window === 'undefined') return 'high'
+  return new URLSearchParams(window.location.search).get('tier') === 'low' ? 'low' : 'high'
 }
 
 export function CatanScene({ view }: { view: CatanClientState }) {
   // Pinned once on mount; see the Water doc comment above for why.
   const boardHexesRef = useRef(view.board.hexes)
+  const tier = useRef(qualityTier()).current
 
   return (
     <Canvas
@@ -114,7 +185,7 @@ export function CatanScene({ view }: { view: CatanClientState }) {
         maxPolarAngle={Math.PI * 0.45}
       />
       <EffectComposer>
-        <N8AO halfRes intensity={2.5} aoRadius={0.4} />
+        {tier === 'high' ? <N8AO halfRes intensity={2.5} aoRadius={0.4} /> : <></>}
         <Bloom luminanceThreshold={1.1} intensity={0.35} mipmapBlur />
         <Vignette eskil={false} offset={0.25} darkness={0.55} />
       </EffectComposer>
