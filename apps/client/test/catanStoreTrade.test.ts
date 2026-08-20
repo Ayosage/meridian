@@ -112,12 +112,48 @@ describe('offerer controls + snapshot resets', () => {
 
   it('a snapshot resolving the open trade clears counterDraft and staged selections', () => {
     seed({ ...MAIN, current: 1, openTrade: OPEN })
-    useCatanStore.getState().startCounter()
+    const s = useCatanStore.getState()
+    s.startCounter()
+    s.toggleTrade(); s.incTradeGive('wood'); s.incTradeGet('ore')
     expect(useCatanStore.getState().counterDraft).not.toBeNull()
+    expect(useCatanStore.getState().tradeGive.wood).toBe(1)
+    expect(useCatanStore.getState().tradeGet.ore).toBe(1)
     useCatanStore.getState().ingestSnapshot({
       seq: 2,
       view: makeView({ seq: 2, turn: { ...MAIN, current: 1, openTrade: null } }),
     })
     expect(useCatanStore.getState().counterDraft).toBeNull()
+    expect(useCatanStore.getState().tradeGive.wood).toBe(0)
+    expect(useCatanStore.getState().tradeGet.ore).toBe(0)
+  })
+
+  it('openTrade appearing on our own turn (our offer posting) resets staged composer selections', () => {
+    seed(MAIN, { wood: 4, ore: 1 }) // current: 0 === our seat; openTrade starts null
+    const s = useCatanStore.getState()
+    s.toggleTrade(); s.incTradeGive('wood'); s.incTradeGet('ore')
+    expect(useCatanStore.getState().tradeGive.wood).toBe(1)
+    expect(useCatanStore.getState().tradeGet.ore).toBe(1)
+    useCatanStore.getState().ingestSnapshot({
+      seq: 2,
+      view: makeView({ seq: 2, turn: { ...MAIN, current: 0, openTrade: OPEN } }),
+    })
+    expect(useCatanStore.getState().tradeGive.wood).toBe(0)
+    expect(useCatanStore.getState().tradeGet.ore).toBe(0)
+  })
+
+  it('a snapshot with openTrade still set (another responder answered) preserves an in-progress counterDraft', () => {
+    seed({ ...MAIN, current: 1, openTrade: OPEN }, { wood: 0, ore: 1 })
+    useCatanStore.getState().startCounter()
+    const draftBefore = useCatanStore.getState().counterDraft
+    expect(draftBefore).not.toBeNull()
+    // Another player's response lands; our offer is still open (not resolved).
+    useCatanStore.getState().ingestSnapshot({
+      seq: 2,
+      view: makeView({
+        seq: 2,
+        turn: { ...MAIN, current: 1, openTrade: { ...OPEN, responses: { 2: { kind: 'reject' } } } },
+      }),
+    })
+    expect(useCatanStore.getState().counterDraft).toEqual(draftBefore)
   })
 })
