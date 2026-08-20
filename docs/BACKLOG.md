@@ -3,19 +3,16 @@
 Items from live playtesting (first human 4-player match vs bots, 2026-08-19).
 Verified on the `/board` preview where noted.
 
-## Phase 5 (trade/dev-card UX) — already planned
-
-- **No trading interface.** Confirmed as phase-5 scope per the spec: player
-  trades (offer/counter), bank 4:1, and port trades all need UI; the engine
-  and protocol already support them.
-- **No dev-card interface.** Can't buy or play dev cards from the HUD —
-  also phase-5 scope. The engine, protocol, and server already handle the
-  full set (knight, road building, year of plenty, monopoly, hidden VP);
-  the HUD needs a buy button + hand panel with play actions, and the
-  bought-this-turn / one-per-turn restrictions surfaced in the UI.
-
 ## Board/asset fixes (phase 6 polish, or earlier if quick)
 
+- **Roll/END TURN button overlap — shipped with phase 5.** Fixed in
+  `hud.css` (roll button `right: 132px`); no longer an issue as of the
+  trade/dev-card UX merge.
+- **Fixed camera + corner HUD panels (build bar, trade panel, dev strip)
+  can cover board vertices at 1280x720.** Vertices under panels are
+  unclickable for humans; consider camera orbit, panel auto-collapse, or
+  filtering obstructed targets in the `legalTargetsOnScreen` dev hook.
+  Discovered during phase-5 E2E work.
 - **Roads don't always align with their hex edge.** Verified on `/board`:
   several demo roads sit rotated off the edge they occupy (blue and red
   roads visibly askew). Likely the edge-rotation math in the piece placement
