@@ -6,6 +6,7 @@ import {
   createCatanGame,
   createRng,
   die,
+  emptyResources,
   isCatanRuleError,
   mustApply,
   SETUP_PLACEMENTS,
@@ -81,6 +82,12 @@ describe('pilotIntent', () => {
     let state = setupComplete()
     state = mustApply(state, { type: 'rollDice', player: 0 }, stubRng([die(1), die(2)]))
     state = mustApply(state, { type: 'offerTrade', player: 0, give: { ore: 1 }, get: { wheat: 1 } })
+    // Zero seat 2's hand so the reject is provably because it lacks the
+    // asked wheat, not an accident of setupComplete()'s starting resources.
+    state = {
+      ...state,
+      players: state.players.map((p, i) => (i === 2 ? { ...p, resources: emptyResources() } : p)),
+    }
     expect(pilotIntent(state, 2, createRng(0))).toEqual({
       type: 'respondTrade',
       player: 2,
