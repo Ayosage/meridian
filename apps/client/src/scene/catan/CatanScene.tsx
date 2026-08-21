@@ -137,11 +137,20 @@ function CatanDebugHooks() {
       ...w.__meridianDebug,
       catanRenderInfo: () => ({ calls: gl.info.render.calls, triangles: gl.info.render.triangles }),
       legalTargetsOnScreen,
+      // This seat's redacted snapshot + seat number, for the companion-bot
+      // driver's heuristics (pip-weighted placement, robber targeting, trade
+      // evaluation). Same information the HUD renders — nothing the seat
+      // couldn't already see.
+      catanView: () => {
+        const { view, seat } = useCatanStore.getState()
+        return { view, seat }
+      },
     }
     return () => {
       if (w.__meridianDebug) {
         delete w.__meridianDebug['catanRenderInfo']
         delete w.__meridianDebug['legalTargetsOnScreen']
+        delete w.__meridianDebug['catanView']
       }
     }
   }, [gl, camera, size])
