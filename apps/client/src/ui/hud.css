@@ -242,9 +242,12 @@
   background: rgba(12, 14, 20, 0.8);
   padding: 6px 12px;
   border-radius: 8px;
+  border-left: 3px solid transparent; /* seat color set inline */
   font-size: 12px;
   min-width: 160px;
 }
+.opponent-card.you-card { background: rgba(20, 28, 40, 0.9); border-top: 1px solid rgba(127, 200, 232, 0.35); border-right: 1px solid rgba(127, 200, 232, 0.35); border-bottom: 1px solid rgba(127, 200, 232, 0.35); }
+.seat-swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
 .opponent-name { font-weight: 700; display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
 .opponent-stats { display: flex; gap: 8px; opacity: 0.85; font-variant-numeric: tabular-nums; }
 .win-overlay .win-vp-cards { text-align: center; font-size: 13px; opacity: 0.85; }
@@ -259,6 +262,10 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* fixed-position panel outside .overlay: set text color explicitly or it
+     inherits the browser-default black onto a near-black background */
+  color: #e8e8f0;
+  font-family: ui-sans-serif, system-ui, sans-serif;
   background: rgba(12, 14, 20, 0.92);
   border: 1px solid rgba(127, 200, 232, 0.25);
   border-radius: 10px;
@@ -323,6 +330,9 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* same contrast trap as .trade-panel: fixed panel outside .overlay */
+  color: #e8e8f0;
+  font-family: ui-sans-serif, system-ui, sans-serif;
   background: rgba(12, 14, 20, 0.92);
   border: 1px solid rgba(127, 200, 232, 0.25);
   border-radius: 10px;
@@ -353,6 +363,9 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* same contrast trap as .trade-panel: fixed panel outside .overlay */
+  color: #e8e8f0;
+  font-family: ui-sans-serif, system-ui, sans-serif;
   background: rgba(12, 14, 20, 0.8);
   padding: 8px 10px;
   border-radius: 8px;

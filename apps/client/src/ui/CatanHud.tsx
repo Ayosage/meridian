@@ -2,29 +2,12 @@ import { useEffect } from 'react'
 import { RESOURCES, type CatanClientState } from '@meridian/rules'
 import { leaveCatanMatch, sendCatanIntent } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
+import { playerCards } from '../scene/catan/hudLogic'
+import { seatColor } from '../scene/catan/palette'
 // Only App.tsx imports hud.css today; this also mounts standalone wherever
 // CatanHud is used, so it owns its own stylesheet dependency rather than
 // relying on whichever entry point happens to import it first.
 import './hud.css'
-
-/**
- * Public VP for one seat, computed straight from the redacted view: hidden
- * VP dev cards never appear here by construction (CatanClientState doesn't
- * carry other seats' dev cards) — this is deliberately the *public* subset
- * of `@meridian/rules`' `victoryPoints`, not a reimplementation of it: that
- * helper is typed over the full `CatanState` (server-side, with real
- * `players[].devCards`), which a `CatanClientState` view doesn't structurally
- * match, so it can't be called here.
- */
-function publicVictoryPoints(view: CatanClientState, seat: number): number {
-  let vp = 0
-  for (const b of Object.values(view.buildings)) {
-    if (b.owner === seat) vp += b.kind === 'city' ? 2 : 1
-  }
-  if (view.awards.longestRoad === seat) vp += 2
-  if (view.awards.largestArmy === seat) vp += 2
-  return vp
-}
 
 function TurnBanner({ view, seat, connected }: { view: CatanClientState; seat: number | null; connected: boolean[] }) {
   const { current, phase } = view.turn
@@ -66,27 +49,29 @@ function HandStrip({ view }: { view: CatanClientState }) {
   )
 }
 
-function OpponentStrip({ view, seat, connected }: { view: CatanClientState; seat: number | null; connected: boolean[] }) {
-  const opponents = view.players.map((_, i) => i).filter((i) => i !== seat)
+function PlayerStrip({ view, seat, connected }: { view: CatanClientState; seat: number | null; connected: boolean[] }) {
   return (
     <div className="opponent-strip">
-      {opponents.map((i) => {
-        const p = view.players[i]!
-        return (
-          <div className="opponent-card" key={i} data-testid={`opponent-${i}`}>
-            <div className="opponent-name">
-              Player {i + 1}
-              {connected[i] === false && <span className="autopilot-badge">autopilot</span>}
-            </div>
-            <div className="opponent-stats">
-              <span>{p.resourceCount} cards</span>
-              <span>{p.devCardCount} dev</span>
-              <span>{p.knightsPlayed} knights</span>
-              <span>{publicVictoryPoints(view, i)} VP</span>
-            </div>
+      {playerCards(view, seat, connected).map((c) => (
+        <div
+          className={c.isYou ? 'opponent-card you-card' : 'opponent-card'}
+          key={c.seat}
+          data-testid={c.isYou ? 'player-you' : `opponent-${c.seat}`}
+          style={{ borderLeftColor: seatColor(c.seat) }}
+        >
+          <div className="opponent-name">
+            <span className="seat-swatch" style={{ background: seatColor(c.seat) }} />
+            {c.isYou ? 'You' : `Player ${c.seat + 1}`}
+            {c.autopilot && <span className="autopilot-badge">autopilot</span>}
           </div>
-        )
-      })}
+          <div className="opponent-stats">
+            <span>{c.resourceCount} cards</span>
+            <span>{c.devCardCount} dev</span>
+            <span>{c.knightsPlayed} knights</span>
+            <span data-testid={`vp-${c.seat}`}>{c.vp} VP</span>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -129,8 +114,9 @@ function WinOverlay({ view }: { view: CatanClientState }) {
 }
 
 /**
- * Live-match HUD: turn/dice/roll/end-turn controls, own hand, opponent
- * public stats, toasts, and the win overlay. Mounted alongside CatanScene
+ * Live-match HUD: turn/dice/roll/end-turn controls, own hand, the full
+ * player strip (self card shows true VP incl. hidden VP dev cards; others
+ * show public stats), toasts, and the win overlay. Mounted alongside CatanScene
  * once `view` is non-null (see App.tsx).
  */
 export function CatanHud() {
@@ -166,7 +152,7 @@ export function CatanHud() {
         END TURN
       </button>
       <HandStrip view={view} />
-      <OpponentStrip view={view} seat={seat} connected={connected} />
+      <PlayerStrip view={view} seat={seat} connected={connected} />
       <Toast />
       <WinOverlay view={view} />
     </div>

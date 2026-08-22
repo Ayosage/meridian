@@ -3,22 +3,11 @@ import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import type { CatanBoard, CatanClientState, EdgeId, VertexId } from '@meridian/rules'
 import { edgeWorld, TILE_TOP, vertexWorld } from './catanLayout'
-import { palette, RESOURCE_COLORS } from './palette'
+import { RESOURCE_COLORS, seatColor } from './palette'
 
 const ASSETS = '/assets/slice'
 /** How far a port is pushed out from its two-vertex midpoint, away from the board center. */
 const PORT_PUSH = 0.35
-
-const SEAT_COLORS: readonly string[] = [
-  palette.players.red,
-  palette.players.blue,
-  palette.players.white,
-  palette.players.orange,
-]
-
-function seatColor(owner: number): string {
-  return SEAT_COLORS[owner] ?? '#999999'
-}
 
 function useSliceGltf(name: string): THREE.Group {
   const { scene } = useGLTF(`${ASSETS}/${name}.glb`)
