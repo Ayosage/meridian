@@ -35,6 +35,18 @@ export const palette = {
   },
 } as const
 
+/** Seat-indexed player colors — shared by 3D pieces and HUD player cards. */
+export const SEAT_COLORS: readonly string[] = [
+  palette.players.red,
+  palette.players.blue,
+  palette.players.white,
+  palette.players.orange,
+]
+
+export function seatColor(seat: number): string {
+  return SEAT_COLORS[seat] ?? '#999999'
+}
+
 /** Port sail tint for a 2:1 resource port; generic ports keep the GLB's cream default. */
 export const RESOURCE_COLORS: Readonly<Record<Resource, string>> = {
   wood: '#2d5a27',
