@@ -61,29 +61,31 @@ Verified on the `/board` preview where noted.
 
 ## HUD/UX issues (live playtest 2026-08-21, human vs upgraded bots)
 
-- **No incoming-trade UI for the receiving player.** `TradePanel.tsx:201`
-  renders the open-trade panel only for the offering seat
-  (`view.turn.current === seat`); every other seat gets nothing while an
-  offer is open. A human can never see, accept, decline, or counter an
-  incoming trade — only bots can respond (they go through the pilot).
-  Biggest gap of the playtest; needs an offer-responder panel (terms +
-  accept/decline/counter) for non-current seats.
-- **Own victory points aren't visible anywhere.** `OpponentStrip` in
-  `CatanHud.tsx` filters the local seat out of the player cards
-  (`.filter((i) => i !== seat)`) and no other HUD element shows your VP.
-  Since it's the self view, it can show TRUE VP (including hidden VP dev
-  cards via the rules engine), not just the public subset opponents see.
-- **Local player should have a card in the top-right player strip.** Same
-  root as above: include a "you" card alongside the opponents (or a
-  visually distinct self card) so the strip reads as the full table.
-- **Player cards lack seat colors.** The `opponent-card` chips don't carry
-  the player's color — red/blue/white/orange already exist as
-  `palette.players` (used by `SEAT_COLORS` in `Pieces.tsx`); surface them
-  on the cards (border/swatch) so pieces map to players at a glance.
-- **Trade UI renders black text on a black background.** Contrast bug in
-  the trade panel styles (`hud.css` / `TradePanel.tsx`) — likely a missing
-  color on panel text inheriting the dark theme background. Audit all
-  trade-panel states (composer, offer review, counter draft) while there.
+- **No incoming-trade UI for the receiving player — RESOLVED (2026-08-22,
+  PR #7).** Misdiagnosed: `IncomingOffer.tsx` existed, was mounted, and the
+  server sends `openTrade` to every seat. It was unreadable, not missing —
+  see the contrast item below — and the bots never *propose* trades, so no
+  offer ever reached the human to begin with. The responder flow (banner →
+  accept/counter/decline) is E2E- and screenshot-verified working.
+- **Own victory points aren't visible anywhere — DONE (2026-08-22, PR #7).**
+  `PlayerStrip` (was `OpponentStrip`) renders every seat; the self card
+  shows TRUE VP (public + hidden VP dev cards from `view.you.devCards`).
+  `hudLogic.ts` `playerCards()` is the tested model builder.
+- **Local player should have a card in the top-right player strip — DONE
+  (2026-08-22, PR #7).** Visually distinct "You" card, seat order kept;
+  E2E `seatOf()` unaffected (self card uses `player-you`, not `opponent-N`).
+- **Player cards lack seat colors — DONE (2026-08-22, PR #7).**
+  `SEAT_COLORS`/`seatColor` promoted from `Pieces.tsx` to `palette.ts`;
+  cards carry a swatch + seat-colored left border.
+- **Trade UI renders black text on a black background — DONE (2026-08-22,
+  PR #7).** Root cause: no global stylesheet, so fixed panels mounted
+  outside `.overlay` inherited browser-default black text. `.trade-panel`,
+  `.offer-banner`, and `.dev-strip` (same latent bug) now set their own
+  color/font. This was also why the offer banner read as "missing".
+- **Bots never propose player trades.** `tools/bots.mjs` responds to offers
+  and bank-trades, but nothing opens an offer — a human never receives one
+  in a bot match. Teach bots to occasionally propose (give surplus / get
+  build-goal need) so the responder UI gets exercised in playtests.
 - **Placeholder: more playtest findings expected.** This was one match;
   do a deliberate sweep next session (user: "probably a few other
   things") and extend this list.
