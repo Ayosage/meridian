@@ -3,19 +3,16 @@
 Items from live playtesting (first human 4-player match vs bots, 2026-08-19).
 Verified on the `/board` preview where noted.
 
-## Phase 5 (trade/dev-card UX) — already planned
-
-- **No trading interface.** Confirmed as phase-5 scope per the spec: player
-  trades (offer/counter), bank 4:1, and port trades all need UI; the engine
-  and protocol already support them.
-- **No dev-card interface.** Can't buy or play dev cards from the HUD —
-  also phase-5 scope. The engine, protocol, and server already handle the
-  full set (knight, road building, year of plenty, monopoly, hidden VP);
-  the HUD needs a buy button + hand panel with play actions, and the
-  bought-this-turn / one-per-turn restrictions surfaced in the UI.
-
 ## Board/asset fixes (phase 6 polish, or earlier if quick)
 
+- **Roll/END TURN button overlap — shipped with phase 5.** Fixed in
+  `hud.css` (roll button `right: 132px`); no longer an issue as of the
+  trade/dev-card UX merge.
+- **Fixed camera + corner HUD panels (build bar, trade panel, dev strip)
+  can cover board vertices at 1280x720.** Vertices under panels are
+  unclickable for humans; consider camera orbit, panel auto-collapse, or
+  filtering obstructed targets in the `legalTargetsOnScreen` dev hook.
+  Discovered during phase-5 E2E work.
 - **Roads don't always align with their hex edge.** Verified on `/board`:
   several demo roads sit rotated off the edge they occupy (blue and red
   roads visibly askew). Likely the edge-rotation math in the piece placement
@@ -34,3 +31,22 @@ Verified on the `/board` preview where noted.
 - **Token numerals too thin.** Regenerate the text-to-mesh numerals with a
   bolder weight / deeper extrude so they read at gameplay camera distance
   (remember the ≥5mm-proud z-fight constraint from the slice build).
+
+## Companion bots (upgrade pass — competent bots to play against)
+
+- **Bots wedge on HUD-occluded board targets.** Observed live (2026-08-21):
+  a companion bot stuck re-clicking a legal vertex hidden behind the wider
+  5-button build bar — the same occlusion class the phase-5 E2E hit. Port
+  the E2E driver's `elementFromPoint` clear-target filter (see
+  `e2e/catan.spec.ts` `clickFirstLegalTarget`) into the bot driver, plus a
+  stall detector (same target N ticks running → skip it or re-probe).
+- **Promote `bots.local.mjs` from untracked local script to a maintained
+  tool.** Commit it (e.g. `apps/client/tools/bots.mjs`), share the driver
+  helpers with the E2E specs instead of a third hand-rolled copy, and give
+  it a README line (`node tools/bots.mjs <CODE> [count]`).
+- **Make the bots competent, not just legal.** Today they greedy-click the
+  first legal target and ignore phase-5 features entirely. Wishlist:
+  placement heuristics (pip-weighted setup instead of first-legal vertex),
+  buy + play dev cards, respond to trade offers (reuse the server pilot's
+  accept rule as a floor), bank-trade surplus toward what they can build,
+  and robber targeting that picks the leader instead of the first hex.

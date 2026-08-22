@@ -87,7 +87,7 @@ export function Highlights({ view }: { view: CatanClientState }) {
     )
   }
 
-  if (mode.kind === 'placeRoad') {
+  if (mode.kind === 'placeRoad' || mode.kind === 'roadBuilding') {
     const ew = edgeWorld()
     return (
       <group>

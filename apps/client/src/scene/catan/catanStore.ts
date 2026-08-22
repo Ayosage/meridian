@@ -14,6 +14,24 @@ import {
   type ResourceCount,
   type VertexId,
 } from '@meridian/rules'
+import {
+  devHand,
+  legalRoadBuildingEdges,
+  monopolyIntent,
+  resolveRoadBuildingClick,
+  yearOfPlentyIntent,
+} from './devCardLogic'
+import {
+  bankTradeIntent,
+  counterTradeIntent,
+  decrementSelection,
+  emptySelection,
+  incomingOfferFor,
+  incrementSelection,
+  offerTradeIntent,
+  selectionTotal,
+  type ResourceSelection,
+} from './tradeLogic'
 
 export type CatanStatus =
   | 'idle'
@@ -42,6 +60,7 @@ export type Mode =
   | { kind: 'discard' }
   | { kind: 'robber' }
   | { kind: 'steal'; hex: Coord; victims: number[] }
+  | { kind: 'roadBuilding'; staged: EdgeId[] }
 
 const IDLE_MODE: Mode = { kind: 'idle' }
 const PLACEMENT_KINDS: ReadonlySet<Mode['kind']> = new Set(['placeSettlement', 'placeRoad', 'placeCity'])
@@ -72,6 +91,8 @@ export function deriveMode(view: CatanClientState, seat: number | null, current:
   // setup turn as a phantom "voluntary" build mode with no legal targets.
   if (STALE_IF_UNFORCED.has(current.kind)) return IDLE_MODE
   if ((current.kind === 'placeSettlement' || current.kind === 'placeRoad') && current.forced) return IDLE_MODE
+  if (current.kind === 'roadBuilding' && (view.turn.phase !== 'main' || view.turn.current !== seat))
+    return IDLE_MODE
   return current
 }
 
@@ -101,6 +122,7 @@ export function legalVerticesForMode(view: CatanClientState, seat: number, mode:
 
 /** Legal edge ids for the given mode; setup uses the just-placed settlement's open edges. */
 export function legalEdgesForMode(view: CatanClientState, seat: number, mode: Mode): EdgeId[] {
+  if (mode.kind === 'roadBuilding') return legalRoadBuildingEdges(view, seat, mode.staged)
   if (mode.kind !== 'placeRoad') return []
   if (view.turn.phase !== 'setup') return legalRoadEdges(view, seat)
   const last = view.turn.setup?.lastSettlement
@@ -211,6 +233,23 @@ interface CatanState {
   connected: boolean[]
   targetPlayers: number | null
 
+  /** TradePanel: open/closed, and which tab (player offer vs. bank) is active. */
+  tradeOpen: boolean
+  tradeTab: 'players' | 'bank'
+  /** Staged composer selections for a new player-to-player offer. */
+  tradeGive: ResourceSelection
+  tradeGet: ResourceSelection
+  /** Staged bank-trade picks (single resource each side). */
+  bankGive: Resource | null
+  bankGet: Resource | null
+  /** Staged counter-offer draft while responding to an incoming trade; null outside that flow. */
+  counterDraft: { give: ResourceSelection; get: ResourceSelection } | null
+
+  /** DevModal: which dev-card modal (if any) is open. */
+  devModal: 'yearOfPlenty' | 'monopoly' | null
+  /** Staged yearOfPlenty picks; reset on opening the modal. */
+  plentySelection: ResourceSelection
+
   setStatus(status: CatanStatus): void
   setJoined(roomId: string): void
   setSeat(seat: number): void
@@ -232,6 +271,8 @@ interface CatanState {
   clickHex(hex: Coord, send: SendIntent): void
   /** Esc: cancel a voluntary placement mode. Never touches a forced mode. */
   cancelMode(): void
+  /** BuildBar/DevPanel: enter roadBuilding mode if the view shows a playable roadBuilding card. */
+  startRoadBuilding(): void
 
   /** DiscardModal: +1 to a resource's staged discard count, capped at the hand count. */
   incrementDiscard(resource: Resource): void
@@ -241,6 +282,56 @@ interface CatanState {
   submitDiscard(send: SendIntent): void
   /** StealChooser: victim-seat click — sends moveRobber with that stealFrom. No-op outside steal mode. */
   clickStealVictim(victim: number, send: SendIntent): void
+
+  /** TradePanel: open/close the panel; opening resets composer staging. No-op while a forced mode is active. */
+  toggleTrade(): void
+  setTradeTab(tab: 'players' | 'bank'): void
+  /** Composer: +1 to the offer's give side, capped at the hand count. */
+  incTradeGive(r: Resource): void
+  /** Composer: -1 to the offer's give side, floored at 0. */
+  decTradeGive(r: Resource): void
+  /** Composer: +1 to the offer's get side, uncapped. */
+  incTradeGet(r: Resource): void
+  /** Composer: -1 to the offer's get side, floored at 0. */
+  decTradeGet(r: Resource): void
+  setBankGive(r: Resource | null): void
+  setBankGet(r: Resource | null): void
+  /** Composer: sends offerTrade from the staged selections; no-op if either side is empty. */
+  submitOffer(send: SendIntent): void
+  /** Bank tab: sends bankTrade from the staged picks; no-op if the trade isn't affordable. */
+  submitBankTrade(send: SendIntent): void
+  /** Responder: accept/reject the open offer as-is. */
+  respondToOffer(response: 'accept' | 'reject', send: SendIntent): void
+  /** Responder: seed a counter-offer draft from the open offer, clamped to the responder's hand. */
+  startCounter(): void
+  /** Counter draft: +1 to the give side, capped at the hand count. */
+  incCounterGive(r: Resource): void
+  /** Counter draft: -1 to the give side, floored at 0. */
+  decCounterGive(r: Resource): void
+  /** Counter draft: +1 to the get side, uncapped. */
+  incCounterGet(r: Resource): void
+  /** Counter draft: -1 to the get side, floored at 0. */
+  decCounterGet(r: Resource): void
+  /** Responder: sends the counter draft as a respondTrade counter, then clears it. */
+  submitCounter(send: SendIntent): void
+  /** Responder: discard the counter draft without sending. */
+  cancelCounter(): void
+  /** Offerer: confirm-trade with a specific responder who accepted/countered. */
+  confirmTradeWith(partner: number, send: SendIntent): void
+  /** Offerer: cancel the open offer outright. */
+  cancelOpenTrade(send: SendIntent): void
+
+  /** DevModal: open the yearOfPlenty/monopoly modal, resetting the plenty staging. */
+  openDevModal(kind: 'yearOfPlenty' | 'monopoly'): void
+  closeDevModal(): void
+  /** yearOfPlenty: +1 to a resource's staged pick, capped at 2 total and at the bank's count. */
+  incPlenty(r: Resource): void
+  /** yearOfPlenty: -1 to a resource's staged pick, floored at 0. */
+  decPlenty(r: Resource): void
+  /** yearOfPlenty: sends playDevCard from the staged picks and closes the modal on success. */
+  submitPlenty(send: SendIntent): void
+  /** monopoly: sends playDevCard for the chosen resource and closes the modal. */
+  submitMonopoly(r: Resource, send: SendIntent): void
 }
 
 const INITIAL = {
@@ -255,6 +346,15 @@ const INITIAL = {
   seats: [] as string[],
   connected: [] as boolean[],
   targetPlayers: null as number | null,
+  tradeOpen: false,
+  tradeTab: 'players' as const,
+  tradeGive: emptySelection(),
+  tradeGet: emptySelection(),
+  bankGive: null as Resource | null,
+  bankGet: null as Resource | null,
+  counterDraft: null as { give: ResourceSelection; get: ResourceSelection } | null,
+  devModal: null as 'yearOfPlenty' | 'monopoly' | null,
+  plentySelection: emptySelection(),
 }
 
 export const useCatanStore = create<CatanState>((set, get) => ({
@@ -273,11 +373,21 @@ export const useCatanStore = create<CatanState>((set, get) => ({
     // already in it (subsequent snapshots as other seats discard too) the
     // player's in-progress selection must survive.
     const enteringDiscard = nextMode.kind === 'discard' && mode.kind !== 'discard'
+    const hadOpenTrade = view?.turn.openTrade != null
+    const hasOpenTrade = payload.view.turn.openTrade != null
+    const tradeResolved = hadOpenTrade && !hasOpenTrade
+    // Our own offer just posted: the review panel replaces the composer, so the
+    // staged selections are done with; a resolved/cancelled trade clears drafts.
+    const ownOfferPosted = !hadOpenTrade && hasOpenTrade && payload.view.turn.current === seat
+    const resetStaging = tradeResolved || ownOfferPosted
     set({
       view: payload.view,
       mode: nextMode,
       status: payload.view.winner !== null ? 'ended' : 'playing',
       discardSelection: enteringDiscard ? EMPTY_DISCARD : discardSelection,
+      counterDraft: tradeResolved ? null : get().counterDraft,
+      tradeGive: resetStaging ? emptySelection() : get().tradeGive,
+      tradeGet: resetStaging ? emptySelection() : get().tradeGet,
     })
   },
 
@@ -286,6 +396,10 @@ export const useCatanStore = create<CatanState>((set, get) => ({
 
   ruleError: (message) => {
     const { view, seat, mode } = get()
+    if (mode.kind === 'roadBuilding') {
+      set({ toast: message, mode: { kind: 'roadBuilding', staged: [] } })
+      return
+    }
     if (!PLACEMENT_KINDS.has(mode.kind)) {
       set({ toast: message })
       return
@@ -316,6 +430,15 @@ export const useCatanStore = create<CatanState>((set, get) => ({
   clickEdge: (edge, send) => {
     const { view, seat, mode } = get()
     if (view === null || seat === null) return
+    if (mode.kind === 'roadBuilding') {
+      const result = resolveRoadBuildingClick(view, seat, mode, edge)
+      if (!result) return
+      if ('intent' in result) {
+        send(result.intent)
+        set({ mode: IDLE_MODE })
+      } else set({ mode: result.mode })
+      return
+    }
     const intent = resolveEdgeClick(view, seat, mode, edge)
     if (!intent) return
     send(intent)
@@ -333,7 +456,7 @@ export const useCatanStore = create<CatanState>((set, get) => ({
 
   cancelMode: () => {
     const { view, seat, mode } = get()
-    if (!PLACEMENT_KINDS.has(mode.kind)) return
+    if (!PLACEMENT_KINDS.has(mode.kind) && mode.kind !== 'roadBuilding') return
     if (view !== null && isModeForced(view, seat)) return
     set({ mode: IDLE_MODE })
   },
@@ -363,5 +486,108 @@ export const useCatanStore = create<CatanState>((set, get) => ({
     if (mode.kind !== 'steal') return
     if (!mode.victims.includes(victim)) return
     send({ type: 'moveRobber', hex: mode.hex, stealFrom: victim })
+  },
+
+  toggleTrade: () => {
+    const { tradeOpen, mode } = get()
+    if (STALE_IF_UNFORCED.has(mode.kind)) return // never over a forced discard/robber/steal
+    set(
+      tradeOpen
+        ? { tradeOpen: false }
+        : { tradeOpen: true, tradeTab: 'players', tradeGive: emptySelection(), tradeGet: emptySelection(), bankGive: null, bankGet: null },
+    )
+  },
+  setTradeTab: (tradeTab) => set({ tradeTab }),
+  incTradeGive: (r) => {
+    const { view, tradeGive } = get()
+    if (view === null) return
+    set({ tradeGive: incrementSelection(tradeGive, r, view.you.resources[r]) })
+  },
+  decTradeGive: (r) => set({ tradeGive: decrementSelection(get().tradeGive, r) }),
+  incTradeGet: (r) => set({ tradeGet: incrementSelection(get().tradeGet, r) }),
+  decTradeGet: (r) => set({ tradeGet: decrementSelection(get().tradeGet, r) }),
+  setBankGive: (bankGive) => set({ bankGive }),
+  setBankGet: (bankGet) => set({ bankGet }),
+  submitOffer: (send) => {
+    const intent = offerTradeIntent(get().tradeGive, get().tradeGet)
+    if (intent) send(intent)
+  },
+  submitBankTrade: (send) => {
+    const { view, seat, bankGive, bankGet } = get()
+    if (view === null || seat === null) return
+    const intent = bankTradeIntent(view, seat, bankGive, bankGet)
+    if (intent) send(intent)
+  },
+  respondToOffer: (response, send) => send({ type: 'respondTrade', response }),
+  startCounter: () => {
+    const { view, seat } = get()
+    if (view === null || seat === null) return
+    const offer = incomingOfferFor(view, seat)
+    if (!offer) return
+    const give = emptySelection()
+    for (const r of RESOURCES) give[r] = Math.min(offer.youGive[r] ?? 0, view.you.resources[r])
+    const getSel = emptySelection()
+    for (const r of RESOURCES) getSel[r] = offer.youReceive[r] ?? 0
+    set({ counterDraft: { give, get: getSel } })
+  },
+  incCounterGive: (r) => {
+    const { view, counterDraft } = get()
+    if (view === null || counterDraft === null) return
+    set({ counterDraft: { ...counterDraft, give: incrementSelection(counterDraft.give, r, view.you.resources[r]) } })
+  },
+  decCounterGive: (r) => {
+    const { counterDraft } = get()
+    if (counterDraft === null) return
+    set({ counterDraft: { ...counterDraft, give: decrementSelection(counterDraft.give, r) } })
+  },
+  incCounterGet: (r) => {
+    const { counterDraft } = get()
+    if (counterDraft === null) return
+    set({ counterDraft: { ...counterDraft, get: incrementSelection(counterDraft.get, r) } })
+  },
+  decCounterGet: (r) => {
+    const { counterDraft } = get()
+    if (counterDraft === null) return
+    set({ counterDraft: { ...counterDraft, get: decrementSelection(counterDraft.get, r) } })
+  },
+  submitCounter: (send) => {
+    const { counterDraft } = get()
+    if (counterDraft === null) return
+    const intent = counterTradeIntent(counterDraft.give, counterDraft.get)
+    if (!intent) return
+    send(intent)
+    set({ counterDraft: null })
+  },
+  cancelCounter: () => set({ counterDraft: null }),
+  confirmTradeWith: (partner, send) => send({ type: 'confirmTrade', partner }),
+  cancelOpenTrade: (send) => send({ type: 'cancelTrade' }),
+
+  startRoadBuilding: () => {
+    const { view, seat, mode } = get()
+    if (view === null || seat === null) return
+    if (STALE_IF_UNFORCED.has(mode.kind)) return
+    if (!devHand(view, seat).some((g) => g.card === 'roadBuilding' && g.playable)) return
+    set({ mode: { kind: 'roadBuilding', staged: [] }, tradeOpen: false })
+  },
+  openDevModal: (devModal) => set({ devModal, plentySelection: emptySelection() }),
+  closeDevModal: () => set({ devModal: null }),
+  incPlenty: (r) => {
+    const { view, plentySelection } = get()
+    if (view === null) return
+    if (selectionTotal(plentySelection) >= 2) return
+    set({ plentySelection: incrementSelection(plentySelection, r, Math.min(2, view.bank[r])) })
+  },
+  decPlenty: (r) => set({ plentySelection: decrementSelection(get().plentySelection, r) }),
+  submitPlenty: (send) => {
+    const { view, plentySelection } = get()
+    if (view === null) return
+    const intent = yearOfPlentyIntent(plentySelection, view.bank)
+    if (!intent) return
+    send(intent)
+    set({ devModal: null })
+  },
+  submitMonopoly: (r, send) => {
+    send(monopolyIntent(r))
+    set({ devModal: null })
   },
 }))
