@@ -38,8 +38,11 @@ Requirements: Node 20+, pnpm 10.
 To play: open http://localhost:5173, pick a player count and Create — share
 the 4-letter code; friends Join with it in their own browsers. The match
 starts when every seat fills (or the host starts early; empty seats get the
-caretaker pilot). Dev extras: `/board` renders a full board without a
-server; `?tier=low` drops the ambient-occlusion pass on weak GPUs.
+caretaker pilot). Short on friends? Companion bots can take the empty seats:
+`cd apps/client && node tools/bots.mjs <CODE> [count]` (default 2 bots; they
+play a competent greedy game through the real UI). Dev extras: `/board`
+renders a full board without a server; `?tier=low` drops the
+ambient-occlusion pass on weak GPUs.
 
 The server owns all game state: clients send intents, receive per-seat
 redacted snapshots.

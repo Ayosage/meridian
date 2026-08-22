@@ -49,7 +49,10 @@ export function edgeWorld(): ReadonlyMap<EdgeId, { pos: [number, number, number]
       if (ew.has(id)) continue
       const a = coordToWorld(hex, TILE_SIZE)
       const b = coordToWorld(add(hex, DIRECTIONS[d]!), TILE_SIZE)
-      const angle = Math.atan2(b[2] - a[2], b[0] - a[0]) + Math.PI / 2
+      // Y-rotation maps local +X to (cos a, -sin a) in XZ — atan2(x, z), not
+      // atan2(z, x), turns the +X-modeled road perpendicular to the
+      // center-to-center line, i.e. along the shared edge.
+      const angle = Math.atan2(b[0] - a[0], b[2] - a[2])
       ew.set(id, { pos: [(a[0] + b[0]) / 2, TILE_TOP, (a[2] + b[2]) / 2], angle })
     }
   }

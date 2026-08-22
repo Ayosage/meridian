@@ -1,15 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
-
-// Deliberately NOT `import { RESOURCES } from '@meridian/rules'`: Playwright's
-// test loader (unlike Vite/Vitest/tsx) resolves that package via Node's
-// native ESM loader, which rejects packages/rules/src/placeholder.ts's bare
-// `import placeholderJson from './rulesets/placeholder.json'` (no `type:
-// "json"` import attribute) — an unrelated, non-Catan ruleset module pulled
-// in transitively through the package's barrel export. Inlining this stable,
-// small enum sidesteps it without touching @meridian/rules (out of scope
-// here). Order matches @meridian/rules' RESOURCES exactly (see
-// packages/rules/src/catan/types.ts).
-const RESOURCES = ['wood', 'brick', 'sheep', 'wheat', 'ore'] as const
+import { expect, test, type Page } from '@playwright/test'
+import { clickFirstClearTarget, driveDiscard, isEnabled, isVisible, tryClick } from './driver.mjs'
 
 /**
  * Seed pinned by a headless search (apps/client/e2e/seedsearch.local.mjs,
@@ -34,74 +24,11 @@ const RESOURCES = ['wood', 'brick', 'sheep', 'wheat', 'ore'] as const
  */
 const SEED = 9
 
-type Target = { kind: 'vertex' | 'edge' | 'hex'; id: string; x: number; y: number }
-
 // Global `window.__meridianDebug` typing (incl. CatanScene's catanRenderInfo
 // / legalTargetsOnScreen extensions) lives in src/dev/debugHooks.tsx.
-
-/** Click the first legal canvas target for the current mode (hexes — robber picks — take priority). */
-async function clickFirstLegalTarget(page: Page): Promise<{ mode: string; targets: Target[] }> {
-  const state = await page.evaluate(() => window.__meridianDebug!.legalTargetsOnScreen!())
-  const ordered = [...state.targets].sort((a, b) => Number(b.kind === 'hex') - Number(a.kind === 'hex'))
-  if (ordered.length > 0) {
-    const clearIdx = await page.evaluate(
-      (points: { x: number; y: number }[]) =>
-        points.findIndex((p) => document.elementFromPoint(p.x, p.y) instanceof HTMLCanvasElement),
-      ordered.map((t) => ({ x: t.x, y: t.y })),
-    )
-    const t = ordered[clearIdx >= 0 ? clearIdx : 0]!
-    await page.mouse.click(t.x, t.y)
-  }
-  return state
-}
-
-/**
- * Bounded isEnabled: bare locator.isEnabled() AUTO-WAITS for the element to
- * attach with NO time limit (default actionTimeout is 0 = unlimited), so
- * probing a button whose modal just unmounted (discard plus/submit, steal
- * victims) freezes that driver forever — this wedged the 3-browser match on
- * rotating pages until the whole test timed out. A detached element is simply
- * "not enabled" for this driver: answer false after 1s.
- */
-async function isEnabled(locator: Locator): Promise<boolean> {
-  return locator.isEnabled({ timeout: 1000 }).catch(() => false)
-}
-async function isVisible(locator: Locator): Promise<boolean> {
-  return locator.isVisible().catch(() => false)
-}
-
-/**
- * Click that gives up quietly when the element goes non-actionable. Every
- * driver click races snapshot latency: the tick re-checks isEnabled/isVisible
- * BEFORE the previous action's snapshot lands, so double-fires on an element
- * that disables or unmounts mid-click are routine — and a bare locator.click()
- * then retries actionability forever, freezing that page's driver (and with
- * it the whole match). Failing the click is always safe: the next tick
- * re-reads fresh state.
- */
-async function tryClick(locator: Locator): Promise<boolean> {
-  try {
-    await locator.click({ timeout: 1000 })
-    return true
-  } catch (e) {
-    console.log(`FAILCLICK ${String(locator)}: ${String((e as Error).message).split('\n')[0]}`)
-    return false
-  }
-}
-
-/** Discard greedily, RESOURCES order, until the staged total matches what's owed, then submit. */
-async function driveDiscard(page: Page): Promise<void> {
-  const submit = page.getByTestId('discard-submit')
-  for (const r of RESOURCES) {
-    if (await isEnabled(submit)) break
-    const plus = page.getByTestId(`discard-plus-${r}`)
-    while (await isEnabled(plus)) {
-      if (!(await tryClick(plus))) break
-      if (await isEnabled(submit)) break
-    }
-  }
-  if (await isEnabled(submit)) await tryClick(submit)
-}
+// isEnabled/isVisible/tryClick/driveDiscard/clickFirstClearTarget — the
+// driver helpers this spec, trade-devcards.spec.ts, and tools/bots.mjs all
+// share — live in e2e/driver.mjs.
 
 /**
  * One decision for one page, mirroring the engine's greedy bot priorities
@@ -133,7 +60,7 @@ async function tick(page: Page, trace: { step: string }): Promise<string> {
   }
 
   trace.step = 'targets-evaluate+click'
-  const { mode, targets } = await clickFirstLegalTarget(page)
+  const { mode, targets } = await clickFirstClearTarget(page)
   if (targets.length > 0) return `target:${mode}`
   if (mode === 'placeCity' || mode === 'placeSettlement' || mode === 'placeRoad') {
     // A placement mode with nothing legal in it — untoggle via the same

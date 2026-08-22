@@ -17,19 +17,32 @@ const TERRAIN_GLB: Readonly<Record<Terrain, string>> = {
 }
 
 /**
- * Local [x, y, z] offset (on the puck, relative to its center) of the clear
- * spot each terrain leaves for a number token. Desert never carries a token.
+ * Local [x, y, z] offset (on the puck, relative to its center) of the token
+ * pad every terrain reserves at the same spot — a modeled `pad_token_*` disc
+ * in each terrain GLB, kept clear of dressing. Only y (the measured pad top)
+ * varies. Desert never carries a token, so it has no token pad.
  */
 export const TOKEN_SPOT: Readonly<Partial<Record<Terrain, readonly [number, number, number]>>> = {
-  mountains: [-0.45, 0.242, 0.35],
-  forest: [0.6, 0.245, -0.1],
-  fields: [-0.38, 0.292, -0.3],
-  pasture: [-0.35, 0.268, 0.25],
-  hills: [0.15, 0.3, 0.55],
+  mountains: [-0.3, 0.248, 0.42],
+  forest: [-0.3, 0.248, 0.42],
+  fields: [-0.3, 0.277, 0.42],
+  pasture: [-0.3, 0.248, 0.42],
+  hills: [-0.3, 0.307, 0.42],
 }
 
-/** Robber Y when it sits on the desert (no TOKEN_SPOT entry to derive a height from). */
-const DESERT_ROBBER_Y = 0.24
+/**
+ * The matching reserved robber pad (`pad_robber_*`, all six terrains) —
+ * mirrored across the tile's front apron from the token pad, so the robber
+ * never drowns in dressing again.
+ */
+const ROBBER_SPOT: Readonly<Record<Terrain, readonly [number, number, number]>> = {
+  mountains: [0.3, 0.245, 0.42],
+  forest: [0.3, 0.245, 0.42],
+  fields: [0.3, 0.274, 0.42],
+  pasture: [0.3, 0.245, 0.42],
+  hills: [0.3, 0.304, 0.42],
+  desert: [0.3, 0.268, 0.42],
+}
 const ROBBER_LIFT = 0.02
 
 function useSliceGltf(name: string): THREE.Group {
@@ -179,9 +192,9 @@ function ScatterInstances({ board }: { board: CatanBoardData }) {
  * dressing here would double them). Every other terrain keeps its full
  * clone (no repeated nodes worth instancing — see docs/PERF.md).
  */
-const GROUND_ONLY_NODE: Partial<Record<Terrain, string>> = {
-  forest: 'forest_ground',
-  pasture: 'pasture_ground',
+const GROUND_ONLY_NODES: Partial<Record<Terrain, readonly string[]>> = {
+  forest: ['forest_ground', 'pad_token_forest', 'pad_robber_forest'],
+  pasture: ['pasture_ground', 'pad_token_pasture', 'pad_robber_pasture'],
 }
 
 function Hex({ hex, hasRobber }: { hex: HexTile; hasRobber: boolean }) {
@@ -196,24 +209,34 @@ function Hex({ hex, hasRobber }: { hex: HexTile; hasRobber: boolean }) {
     () => (hex.token != null ? findMeshByName(tokensRoot, `token_${hex.token}`) : null),
     [tokensRoot, hex.token],
   )
-  const groundNodeName = GROUND_ONLY_NODE[hex.terrain]
-  const groundMesh = useMemo(
-    () => (groundNodeName ? findMeshByName(dressing, groundNodeName) : null),
-    [dressing, groundNodeName],
+  const groundNodeNames = GROUND_ONLY_NODES[hex.terrain]
+  const groundMeshes = useMemo(
+    () =>
+      groundNodeNames
+        ? groundNodeNames.map((n) => findMeshByName(dressing, n)).filter((m): m is THREE.Mesh => m !== null)
+        : null,
+    [dressing, groundNodeNames],
   )
 
-  const robberY = (spot ? spot[1] : DESERT_ROBBER_Y) + ROBBER_LIFT
+  const robberSpot = ROBBER_SPOT[hex.terrain]
 
   return (
     <group position={pos}>
       <Clone object={puck} castShadow receiveShadow />
-      {groundNodeName ? (
-        groundMesh && <Clone object={groundMesh} castShadow receiveShadow />
+      {groundMeshes ? (
+        groundMeshes.map((m) => <Clone key={m.name} object={m} castShadow receiveShadow />)
       ) : (
         <Clone object={dressing} castShadow receiveShadow />
       )}
       {tokenMesh && spot && <Clone object={tokenMesh} position={spot} castShadow receiveShadow />}
-      {hasRobber && <Clone object={robber} position={[0, robberY, 0]} castShadow receiveShadow />}
+      {hasRobber && (
+        <Clone
+          object={robber}
+          position={[robberSpot[0], robberSpot[1] + ROBBER_LIFT, robberSpot[2]]}
+          castShadow
+          receiveShadow
+        />
+      )}
     </group>
   )
 }
