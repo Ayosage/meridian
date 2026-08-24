@@ -136,7 +136,9 @@ bot offer resolves (confirm on accept / cancel at deadline).
 
 ## 3. Protocol + client
 
-- `@meridian/protocol`: `bots` added to the create-options schema.
+- No protocol-package change: room create options are plain Colyseus
+  payloads validated in `CatanRoom.onCreate` (only intents are
+  zod-schema'd), so `bots` needs no `@meridian/protocol` entry.
 - `net/catan.ts` `createCatanMatch(players, bots)` forwards it (plus
   a `?bots=` query param alongside `?seed=`/`?vp=` for E2E).
 - `Lobby.tsx`: bot-count selector under the player-count choice —
