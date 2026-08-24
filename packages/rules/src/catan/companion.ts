@@ -75,7 +75,7 @@ export function robberHexScore(state: CatanState, seat: PlayerId, hexKey: string
   return owners * (1 + pips(hex?.token ?? null))
 }
 
-/** Shed from the largest piles first; ties broken in RESOURCES order. (Moved from apps/server pilot.ts — Task 2 dedupes.) */
+/** Shed from the largest piles first; ties broken in RESOURCES order. Duplicates apps/server pilot.ts; Task 2 dedupes. */
 export function greedyDiscard(state: CatanState, seat: PlayerId, owed: number): Partial<ResourceCount> {
   const hand = { ...state.players[seat]!.resources }
   const out: Partial<ResourceCount> = {}
@@ -84,6 +84,7 @@ export function greedyDiscard(state: CatanState, seat: PlayerId, owed: number): 
     let best: Resource = RESOURCES[0]!
     for (const r of RESOURCES) if (hand[r] > hand[best]) best = r
     const take = Math.min(hand[best], remaining)
+    if (take === 0) break // hand exhausted
     out[best] = (out[best] ?? 0) + take
     hand[best] -= take
     remaining -= take

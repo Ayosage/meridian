@@ -79,4 +79,12 @@ describe('companion heuristics', () => {
     expect(total).toBe(4)
     expect(out.wood).toBeGreaterThanOrEqual(3) // biggest pile pays most
   })
+
+  it('greedyDiscard terminates when owed exceeds hand, returning all available cards', () => {
+    const state = withResources(inMain(), 0, { wood: 5, brick: 1 })
+    const handTotal = Object.values(state.players[0]!.resources).reduce((n, v) => n + v, 0)
+    const out = greedyDiscard(state, 0, 100) // owed far exceeds the hand
+    const total = Object.values(out).reduce((n, v) => n + (v ?? 0), 0)
+    expect(total).toBe(handTotal) // returns all cards in hand
+  })
 })
