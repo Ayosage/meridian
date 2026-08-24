@@ -947,7 +947,9 @@ git add apps/server/src/rooms/CatanRoom.ts apps/server/src/schema/CatanLobbyStat
 git commit -m "feat(server): native bot seats — bots option, companion brain dispatch, offer window"
 ```
 
----### Task 5: Bot offer window integration test
+---
+
+### Task 5: Bot offer window integration test
 
 **Files:**
 - Test: `apps/server/test/companion-room.test.ts` (extend)
