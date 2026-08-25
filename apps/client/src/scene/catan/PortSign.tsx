@@ -24,6 +24,8 @@ const FONT_URL = '/assets/fonts/helvetiker_bold.typeface.json'
 const RAFT_URL = '/assets/slice/raft.glb'
 
 const INK = '#2a2318'
+/** Generic "3:1" text sits on the same ink-colored backing plate every port gets — needs a light color of its own or it vanishes into its own backing. */
+const GENERIC_RATE_COLOR = '#f2e6c9'
 
 /**
  * Raft placement relative to the boat (`p.position`): pure outward push
@@ -37,7 +39,7 @@ const INK = '#2a2318'
  * Combining both — push further out (guarantees open water) *and* to the
  * side (clears the boat) — satisfies both.
  */
-const RAFT_EXTRA_OUTWARD = 0.55
+const RAFT_EXTRA_OUTWARD = 0.85
 const RAFT_LATERAL_OFFSET = 0.45
 
 // --- Raft deck placement. raft.glb's object origin sits at the deck's
@@ -54,12 +56,17 @@ const RAFT_TOP_Y = RAFT_ORIGIN_Y + RAFT_DECK_HEIGHT
 // --- Content: the resource icon + trade-rate text, embossed proud on the
 // raft's top face, lying flat and reading straight up toward the camera —
 // exactly like the number tokens (docs/PERF.md's "static after mount"
-// idiom: no per-port rotation, no billboarding). Built once as a single
-// merged, vertex-colored static mesh (cheaper than one InstancedMesh per
-// resource kind — every port's content differs in icon shape and/or tint).
+// idiom). Built once as a single merged, vertex-colored static mesh
+// (cheaper than one InstancedMesh per resource kind — every port's
+// content differs in icon shape and/or tint). The content's own *reading
+// orientation* stays fixed world-up regardless of the raft's yaw (a
+// Y-rotation on a Y-up-facing surface never changes which way it's
+// readable from above — matches the un-rotated, always-correct tokens);
+// only its *position* follows the raft's yaw, via facingAngle, so it
+// stays centered on the deck once the deck itself starts turning to fix
+// the sliver problem below.
 const CONTENT_GAP = 0.01
 const CONTENT_DEPTH = 0.03
-const CONTENT_Y = RAFT_TOP_Y + CONTENT_GAP + CONTENT_DEPTH / 2
 const ICON_VIEWBOX = 24
 /** World-unit height the 24x24 icon viewBox is scaled to. */
 const ICON_SIZE = 0.2
@@ -69,6 +76,19 @@ const RATE_TEXT_SIZE = 0.2
 const RATE_TEXT_CURVE_SEGMENTS = 8
 const RATE_TEXT_X_PAIRED = 0.13
 const RATE_TEXT_X_ALONE = 0
+
+// --- Ink backing: a thin dark wafer under the icon+rate (token-style ink
+// treatment), sized to cover both in either layout. Folded into the same
+// merged content mesh as everything else below — more geometry, not
+// another draw call. Exists because RESOURCE_COLORS values close in hue
+// to the deck's own wood tones (wheat's tan especially) read low-contrast
+// directly on bare planks; a dark backing gives every resource color the
+// same contrast floor instead of special-casing wheat's hex value alone.
+const INK_BACKING_W = 0.58
+const INK_BACKING_D = 0.26
+const INK_BACKING_HEIGHT = 0.012
+const INK_BACKING_Y = RAFT_TOP_Y + CONTENT_GAP + INK_BACKING_HEIGHT / 2
+const CONTENT_Y = INK_BACKING_Y + INK_BACKING_HEIGHT / 2 + CONTENT_GAP + CONTENT_DEPTH / 2
 
 /** Rafts float beside the board and must not steal PickLayer's vertex/edge/hex raycasts. */
 function noRaycast() {}
@@ -83,12 +103,39 @@ const SCRATCH_COLOR = new THREE.Color()
  * (RAFT_LATERAL_OFFSET, along the perpendicular of `out` — (outZ, -outX),
  * a 90° rotation in the XZ plane, always the same rotational sense around
  * the ring so every raft ends up on a consistent side of its own boat).
+ * RAFT_EXTRA_OUTWARD needs real margin, not just "past the boat": at some
+ * ring headings the tile's own edge sits close enough behind the boat that
+ * a modest push still let the tile occlude most of the raft, leaving only
+ * a thin unclipped strip visible — read as a "sliver" bug before tracing
+ * it to distance, not orientation (confirmed by parallax: rotating the
+ * camera revealed more of the same raft rather than a shape that stayed
+ * thin from every angle).
  */
 function raftWorldXZ(p: PortPlacement): [number, number] {
   return [
     p.position[0] + p.outX * RAFT_EXTRA_OUTWARD + p.outZ * RAFT_LATERAL_OFFSET,
     p.position[2] + p.outZ * RAFT_EXTRA_OUTWARD - p.outX * RAFT_LATERAL_OFFSET,
   ]
+}
+
+/**
+ * Fixed XZ this rig's board camera starts at (CatanScene.tsx's
+ * `camera={{ position: [0, 9, 8], ... }}`). A raft with no yaw is
+ * world-axis-aligned regardless of where it sits on the ring — for some
+ * port headings the camera ends up looking almost straight down the
+ * raft's own wide (0.64) axis, foreshortening the whole rectangular deck
+ * into a near-invisible sliver. Yawing each raft so its *short* (0.4,
+ * depth) axis points at the camera keeps the wide axis roughly
+ * perpendicular to the view instead, presenting its broad face — the
+ * same fix, and the same formula, this file used earlier for vertical
+ * plaque content that needed to face the camera rather than the board
+ * center to stay legible from every ring position.
+ */
+const CAMERA_XZ: readonly [number, number] = [0, 8]
+
+/** Yaw that points local +Z at CAMERA_XZ (rotationY(θ) maps local +Z to world (sinθ, cosθ)). */
+function facingAngle(x: number, z: number): number {
+  return Math.atan2(CAMERA_XZ[0] - x, CAMERA_XZ[1] - z)
 }
 
 /** First mesh in `root` whose node name matches exactly (mirrors CatanBoard.tsx's findMeshByName). */
@@ -103,21 +150,22 @@ function findMeshByName(root: THREE.Object3D, name: string): THREE.Mesh | null {
 /**
  * One static InstancedMesh for every raft deck, geometry/material shared
  * (by reference) from the loaded GLB — no per-instance tint, so no clone
- * needed (mirrors CatanBoard.tsx's InstancedVariant). Translation only, no
- * per-port yaw: the deck's footprint is close enough to symmetric that a
- * fixed orientation reads fine from every angle, and — more importantly —
- * keeping it unrotated means raftWorldXZ's clearance math (above) doesn't
- * also have to account for the footprint swinging toward the boat at some
- * headings.
+ * needed (mirrors CatanBoard.tsx's InstancedVariant). Yawed per port
+ * (rotationsY, Y-axis only — the deck stays perfectly flat on the water,
+ * never tilted) via facingAngle, so the deck's wide axis doesn't
+ * foreshorten into a sliver at ring headings where a fixed world
+ * orientation would put it edge-on to the camera.
  */
 function RaftInstances({
   geometry,
   material,
   positions,
+  rotationsY,
 }: {
   geometry: THREE.BufferGeometry
   material: THREE.Material
   positions: readonly [number, number, number][]
+  rotationsY: readonly number[]
 }) {
   const ref = useRef<THREE.InstancedMesh>(null)
 
@@ -125,13 +173,13 @@ function RaftInstances({
     const inst = ref.current
     if (!inst) return
     positions.forEach((p, i) => {
-      SCRATCH_MATRIX.makeTranslation(...p)
+      SCRATCH_MATRIX.makeRotationY(rotationsY[i]!).setPosition(p[0], p[1], p[2])
       inst.setMatrixAt(i, SCRATCH_MATRIX)
     })
     inst.instanceMatrix.needsUpdate = true
     inst.computeBoundingSphere()
     inst.raycast = noRaycast
-  }, [positions])
+  }, [positions, rotationsY])
 
   if (positions.length === 0) return null
   return (
@@ -252,14 +300,30 @@ function buildIconGeometry(resource: Resource, loader: SVGLoader): THREE.BufferG
 }
 
 /**
- * Bakes every port's content (icon + "2:1" for resource ports, "3:1" alone
- * for generic ones) directly into world space and merges it into one
- * static mesh — see the CONTENT block comment above for why this beats
- * per-resource instancing here. No per-port matrix: content lies flat and
- * unrotated (translation only), same as the raft deck itself.
+ * Rotates a local (offsetX, 0) position offset by yaw θ — the position-only
+ * counterpart of Matrix4.makeRotationY (x' = x·cosθ, z' = -x·sinθ), used to
+ * keep content/backing centered on the raft once the deck itself is yawed.
+ * Never applied to the content geometry's own orientation, only to where
+ * it's translated — see the CONTENT block comment for why.
+ */
+function rotateOffsetX(offsetX: number, cos: number, sin: number): [number, number] {
+  return [offsetX * cos, -offsetX * sin]
+}
+
+/**
+ * Bakes every port's content (ink backing + icon + "2:1" for resource
+ * ports, backing + "3:1" alone for generic ones) directly into world space
+ * and merges it into one static mesh — see the CONTENT and ink-backing
+ * block comments above for why this beats per-resource instancing and a
+ * separate backing layer. Every piece shares the same per-port yaw
+ * (facingAngle, matching RaftInstances) for its *position*; only the
+ * backing plate's own geometry is rotated to match (a plain rectangle has
+ * no "reading direction" to protect) — the icon/text geometry itself never
+ * rotates.
  */
 function buildContentGeometry(
   placements: readonly PortPlacement[],
+  inkBacking: THREE.BufferGeometry,
   iconGeometry: Record<Resource, THREE.BufferGeometry>,
   rate2to1: THREE.BufferGeometry,
   rate3to1: THREE.BufferGeometry,
@@ -267,17 +331,28 @@ function buildContentGeometry(
   const parts: THREE.BufferGeometry[] = []
   for (const p of placements) {
     const [x, z] = raftWorldXZ(p)
+    const yaw = facingAngle(x, z)
+    const cos = Math.cos(yaw)
+    const sin = Math.sin(yaw)
+
+    const backing = colorize(inkBacking, INK)
+    backing.rotateY(yaw)
+    backing.translate(x, INK_BACKING_Y, z)
+    parts.push(backing)
 
     if (p.kind === 'generic') {
-      const text = colorize(rate3to1, INK)
-      text.translate(x + RATE_TEXT_X_ALONE, CONTENT_Y, z)
+      const [tx, tz] = rotateOffsetX(RATE_TEXT_X_ALONE, cos, sin)
+      const text = colorize(rate3to1, GENERIC_RATE_COLOR)
+      text.translate(x + tx, CONTENT_Y, z + tz)
       parts.push(text)
     } else {
+      const [ix, iz] = rotateOffsetX(ICON_LOCAL_X, cos, sin)
       const icon = iconGeometry[p.kind].clone()
-      icon.translate(x + ICON_LOCAL_X, CONTENT_Y, z)
+      icon.translate(x + ix, CONTENT_Y, z + iz)
 
+      const [tx, tz] = rotateOffsetX(RATE_TEXT_X_PAIRED, cos, sin)
       const text = colorize(rate2to1, RESOURCE_COLORS[p.kind])
-      text.translate(x + RATE_TEXT_X_PAIRED, CONTENT_Y, z)
+      text.translate(x + tx, CONTENT_Y, z + tz)
 
       parts.push(icon, text)
     }
@@ -291,12 +366,16 @@ function buildContentGeometry(
 /**
  * Port rafts: a flat, vertex-colored plank platform (raft.glb, Blender-
  * authored via the same pipeline as port.glb/settlement.glb) floating just
- * above the water beside each boat, carrying the resource icon (SVGLoader-
+ * above the water beside each boat, yawed per port (facingAngle) so its
+ * wide axis presents broadside to the camera instead of foreshortening
+ * edge-on at some ring headings. Carries the resource icon (SVGLoader-
  * converted from ResourceIcon.tsx's path data) and trade rate for resource
- * ports, or just the rate for generic ones — both lying flat on the deck,
- * reading upward like the number tokens. Draw calls: 1 raft InstancedMesh
- * (shadow-casting, so 2 passes: main + the sun's shadow map) + 1 merged
- * content mesh (icons + all rate text, no shadow) = 3 total.
+ * ports, or just the rate for generic ones, on an ink backing plate — both
+ * lying flat and reading straight up like the number tokens (unaffected by
+ * the raft's own yaw — see the CONTENT block comment). Draw calls: 1 raft
+ * InstancedMesh (shadow-casting, so 2 passes: main + the sun's shadow map)
+ * + 1 merged content mesh (ink backing + icons + all rate text, no
+ * shadow) = 3 total.
  */
 export function PortSigns({ placements }: { placements: readonly PortPlacement[] }) {
   const font = useLoader(FontLoader, FONT_URL)
@@ -315,6 +394,14 @@ export function PortSigns({ placements }: { placements: readonly PortPlacement[]
         roughness: 0.9,
         side: THREE.DoubleSide,
       }),
+    [],
+  )
+
+  const inkBackingGeometry = useMemo(
+    // BoxGeometry is indexed by default; the icon/text geometries it gets
+    // merged with (ExtrudeGeometry/TextGeometry) aren't — mergeGeometries
+    // requires every input to match on indexed-ness or none at all.
+    () => new THREE.BoxGeometry(INK_BACKING_W, INK_BACKING_HEIGHT, INK_BACKING_D).toNonIndexed(),
     [],
   )
 
@@ -353,9 +440,18 @@ export function PortSigns({ placements }: { placements: readonly PortPlacement[]
     [placements],
   )
 
+  const raftRotations = useMemo(
+    () =>
+      placements.map((p) => {
+        const [x, z] = raftWorldXZ(p)
+        return facingAngle(x, z)
+      }),
+    [placements],
+  )
+
   const contentGeometry = useMemo(
-    () => buildContentGeometry(placements, iconGeometry, rateGeometry.twoToOne, rateGeometry.threeToOne),
-    [placements, iconGeometry, rateGeometry],
+    () => buildContentGeometry(placements, inkBackingGeometry, iconGeometry, rateGeometry.twoToOne, rateGeometry.threeToOne),
+    [placements, inkBackingGeometry, iconGeometry, rateGeometry],
   )
 
   const raftMaterial = raftMesh && (Array.isArray(raftMesh.material) ? raftMesh.material[0]! : raftMesh.material)
@@ -363,7 +459,12 @@ export function PortSigns({ placements }: { placements: readonly PortPlacement[]
   return (
     <>
       {raftMesh && raftMaterial && (
-        <RaftInstances geometry={raftMesh.geometry} material={raftMaterial} positions={raftPositions} />
+        <RaftInstances
+          geometry={raftMesh.geometry}
+          material={raftMaterial}
+          positions={raftPositions}
+          rotationsY={raftRotations}
+        />
       )}
       {contentGeometry && (
         <mesh
