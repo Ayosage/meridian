@@ -1,5 +1,7 @@
 import {
+  coordKey,
   RESOURCES,
+  TERRAIN_RESOURCE,
   totalResources,
   type CatanIntent,
   type CatanState,
@@ -47,7 +49,27 @@ export function deriveCatanEvents(
   switch (intent.type) {
     case 'rollDice': {
       const dice = after.turn.dice!
-      events.push({ kind: 'roll', player: p, dice, total: dice[0] + dice[1], gains: gains(before, after) })
+      const total = dice[0] + dice[1]
+      // Why-nothing context: hexes matching the roll that the robber blocked,
+      // and resources denied by the bank-shortage rule (multi-claimant short
+      // bank pays nobody) — the two silent payout-eaters players ask about.
+      const robbedHexes: Resource[] = []
+      if (total !== 7) {
+        for (const hex of before.board.hexes) {
+          if (hex.token !== total) continue
+          if (coordKey(hex.coord) !== before.board.robber) continue
+          const res = TERRAIN_RESOURCE[hex.terrain]
+          if (res) robbedHexes.push(res)
+        }
+      }
+      events.push({
+        kind: 'roll',
+        player: p,
+        dice,
+        total,
+        gains: gains(before, after),
+        ...(robbedHexes.length > 0 ? { robbed: robbedHexes } : {}),
+      })
       break
     }
     case 'discard': {

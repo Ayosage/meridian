@@ -63,6 +63,19 @@ describe('deriveCatanEvents', () => {
     }
   })
 
+  it('roll: names the resource a robber-blocked matching hex would have paid', () => {
+    let s = setupComplete()
+    // park the robber on a token-6 hex, then roll a 6
+    const blocked = s.board.hexes.find((h) => h.token === 6)!
+    s = { ...s, board: { ...s.board, robber: `${blocked.coord.q},${blocked.coord.r}` } }
+    const { events } = eventsFor(s, { type: 'rollDice', player: s.turn.current }, stubRng([die(3), die(3)]))
+    const roll = events.find((e) => e.kind === 'roll')!
+    if (roll.kind === 'roll') {
+      expect(roll.robbed).toBeDefined()
+      expect(roll.robbed!.length).toBeGreaterThan(0)
+    }
+  })
+
   it('bankTrade: reports the real rate paid', () => {
     const state = withResources(inMain(), 0, { wood: 4 })
     const cur = state.turn.current

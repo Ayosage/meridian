@@ -130,7 +130,7 @@ type ResourceMap = Partial<Record<Resource, number>>
  * the seat's own snapshot could reveal.
  */
 export type CatanEvent =
-  | { kind: 'roll'; player: number; dice: readonly [number, number]; total: number; gains: Readonly<Record<number, ResourceMap>> }
+  | { kind: 'roll'; player: number; dice: readonly [number, number]; total: number; gains: Readonly<Record<number, ResourceMap>>; robbed?: readonly Resource[] }
   | { kind: 'discard'; player: number; count: number; resources?: ResourceMap }
   | { kind: 'robber'; player: number; victim: number | null; stolen?: Resource }
   | { kind: 'monopoly'; player: number; resource: Resource; taken: Readonly<Record<number, number>> }
