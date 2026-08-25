@@ -133,6 +133,9 @@ export function CatanHud() {
     <div className="overlay catan-hud">
       <TurnBanner view={view} seat={seat} connected={connected} />
       <DiceDisplay dice={view.turn.dice} />
+      <div className="orbit-hint" data-testid="orbit-hint">
+        drag to rotate · scroll to zoom
+      </div>
       <button
         type="button"
         className="roll-button"

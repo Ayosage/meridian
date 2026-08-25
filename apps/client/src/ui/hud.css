@@ -186,6 +186,15 @@
   background: #6b5b1f;
   color: #f4d97a;
 }
+.orbit-hint {
+  position: absolute;
+  top: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  opacity: 0.55;
+  pointer-events: none;
+}
 .catan-hud .dice-display {
   position: absolute;
   top: 56px;
