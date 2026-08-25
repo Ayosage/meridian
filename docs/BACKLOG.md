@@ -218,3 +218,21 @@ four attempts.
   Colyseus has hooks for this (e.g. persisting `CatanState` on an interval
   or on `onLeave`/`onDispose`, replaying it in `onCreate`/reconnect); a
   meaningful future feature, not attempted here.
+
+## Delta-review follow-ups (2026-08-25, pre-merge triage)
+
+- **Event-redaction leak-replay test (do soon).** `redactEventForSeat` is
+  fail-open (strips known secrets, passes the rest); every current field is
+  verified public, but a future event kind with a secret field leaks by
+  default. Add an events analogue of `redact-replay.test.ts` asserting a
+  bystander seat's events never carry fields outside a whitelist.
+- Action-log entry keys change wholesale as the log grows (cosmetic
+  unmount/remount churn); a monotonic event id in the store would fix.
+- `events.ts` roll comment overstates coverage (bank-shortage non-payouts are
+  not yet explained in the log) and `robbed` can name hexes nobody was owed.
+- Port boats + sign content rebuild on each robber move (`board` identity
+  re-mint); keying Ports on `board.ports` would drop even that.
+- Reconnect carries no event backfill — log gaps silently (fine for an
+  ephemeral ticker; revisit only if the log gains persistence).
+- Companion rules test prints its robber tally table on every suite run —
+  silence whenever convenient.
