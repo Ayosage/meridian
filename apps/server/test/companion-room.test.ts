@@ -11,6 +11,12 @@ afterEach(async () => { await server.cleanup() })
 
 async function settle(ms = 120): Promise<void> { await new Promise((r) => setTimeout(r, ms)) }
 
+/** Poll until cond() holds (deadline 3s) — avoids brittle fixed sleeps. Matches catan-reclaim.test.ts's idiom. */
+async function waitFor(cond: () => boolean): Promise<void> {
+  for (let i = 0; i < 300 && !cond(); i++) await settle(10)
+  expect(cond()).toBe(true)
+}
+
 const FAST = { pilotDelayMs: 0, botDelayMs: 0, seed: 1 }
 
 const RESOURCES = ['wood', 'brick', 'sheep', 'wheat', 'ore'] as const
@@ -269,5 +275,49 @@ describe('CatanRoom with native bots', () => {
 
     expect(idleMs).not.toBeNull()
     expect(idleMs!).toBeLessThan(1_000)
+  })
+
+  it('a solo human vs bots room pauses when the human disconnects and resumes bots on reclaim', async () => {
+    const c = await server.sdk.joinOrCreate('catan', {
+      players: 4, bots: 3, pilotDelayMs: 0, botDelayMs: 30, layout: 'beginner', seed: 6,
+    })
+    const sink: CatanSnapshotPayload[] = []
+    c.onMessage(MSG.SNAPSHOT, (p: CatanSnapshotPayload) => sink.push(p))
+    c.onMessage('*', () => undefined)
+    await settle()
+
+    // Reach into the server-side room (same idiom as the poison test above):
+    // once the human's socket closes below, no more snapshots reach IT, so
+    // pause/resume must be observed on the room's own authoritative game
+    // state instead of the (now-disconnected) client's sink.
+    const room = server.getRoomById(c.roomId) as unknown as {
+      game: { seq: number; turn: { current: number }; buildings: Record<string, unknown> } | null
+    }
+
+    // human (host, seat 0) plays its first setup action
+    c.send(MSG.INTENT, { type: 'placeSetupSettlement', vertex: vertexId({ q: 2, r: 0 }, 0) })
+    c.send(MSG.INTENT, { type: 'placeSetupRoad', edge: edgeId({ q: 2, r: 0 }, 0) })
+    // bots 1-3 place their forward-round setup picks unprompted
+    await waitFor(() => Object.keys(room.game?.buildings ?? {}).length >= 4)
+    expect(room.game!.turn.current).not.toBe(0) // the bots' backward round is still to come
+    const seqBeforeDrop = room.game!.seq
+
+    const token = c.reconnectionToken
+    await c.leave(true) // consented drop; CatanRoom's onLeave always allows reconnection (spec §4)
+    await settle(30)
+
+    // Paused: humansConnected() === 0, so schedulePilot refuses to drive any
+    // bot seat even though whole rounds of bot-only setup turns remain.
+    await settle(150) // a few bot delay periods (30ms each)
+    expect(room.game!.seq).toBe(seqBeforeDrop)
+
+    const c2 = await server.sdk.reconnect(token)
+    const sink2: CatanSnapshotPayload[] = []
+    c2.onMessage(MSG.SNAPSHOT, (p: CatanSnapshotPayload) => sink2.push(p))
+    c2.onMessage('*', () => undefined)
+    await waitFor(() => sink2.length > 0)
+    expect(sink2.at(-1)!.view.you.seat).toBe(0) // seat restored, snapshot arrived
+
+    await waitFor(() => room.game!.seq > seqBeforeDrop) // bots resume driving
   })
 })
