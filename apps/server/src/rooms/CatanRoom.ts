@@ -237,12 +237,35 @@ export class CatanRoom extends Room<CatanLobbyState> {
       this.offerDeadlineHit = false
       return
     }
+    // The window only exists to bound how long we wait on responses that
+    // might still arrive. Once every other seat has answered, none can — and
+    // the proposer parks (companionIntent returns null while its own offer is
+    // open and unconfirmable), leaving no pending timer. Resolve immediately
+    // instead of idling out the rest of the window.
+    if (this.everySeatAnswered()) {
+      this.offerTimer?.clear()
+      this.offerTimer = null
+      this.offerDeadlineHit = true
+      this.schedulePilot() // applyAndBroadcast already ran it with the flag unset
+      return
+    }
     if (this.offerTimer) return // already armed for this offer
     this.offerTimer = this.clock.setTimeout(() => {
       this.offerTimer = null
       this.offerDeadlineHit = true
       this.schedulePilot()
     }, this.offerWindowMs)
+  }
+
+  /** True once every seat but the proposer has answered the open offer. */
+  private everySeatAnswered(): boolean {
+    const offer = this.game?.turn.openTrade
+    if (!offer) return false
+    for (let seat = 0; seat < this.seatClients.length; seat++) {
+      if (seat === this.game!.turn.current) continue
+      if (offer.responses[seat] === undefined) return false
+    }
+    return true
   }
 
   async onLeave(client: Client) {

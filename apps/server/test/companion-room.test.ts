@@ -174,4 +174,64 @@ describe('CatanRoom with native bots', () => {
     expect(sawBotOffer).toBe(true)
     expect(sawWindowResolvedOffer).toBe(true)
   })
+
+  it('resolves a bot offer as soon as every seat has answered, without idling out the window', async () => {
+    // A wide window (5s) against a fast bot delay: if the room waits the whole
+    // window even once nobody is left to answer, the close lands ~5s after the
+    // last response instead of one bot delay after it.
+    const c = await server.sdk.joinOrCreate('catan', {
+      players: 4, bots: 3, pilotDelayMs: 0, botDelayMs: 20, offerWindowMs: 5_000, seed: 6, targetVp: 4,
+    })
+    const sink: CatanSnapshotPayload[] = []
+    c.onMessage(MSG.SNAPSHOT, (p: CatanSnapshotPayload) => sink.push(p))
+    c.onMessage('*', () => undefined)
+    await settle()
+
+    let allAnsweredAt: number | null = null
+    let lastResponses: NonNullable<CatanClientState['turn']['openTrade']>['responses'] | null = null
+    let idleMs: number | null = null
+    let lastActedSeq = -1
+
+    for (let i = 0; i < 600; i++) {
+      const view = sink.at(-1)?.view
+      if (!view) break
+      if (view.winner !== null) break
+      const offer = view.turn.openTrade
+      if (offer && view.turn.current !== 0) {
+        lastResponses = offer.responses
+        const everyoneAnswered = [0, 1, 2, 3].every(
+          (seat) => seat === view.turn.current || offer.responses[seat] !== undefined,
+        )
+        if (everyoneAnswered) allAnsweredAt ??= Date.now()
+        // this seat answers promptly — the point is what the room does *after*
+        // the last outstanding response lands
+        if (offer.responses[0] === undefined && view.seq !== lastActedSeq) {
+          c.send(MSG.INTENT, { type: 'respondTrade', response: 'reject' })
+          lastActedSeq = view.seq
+        }
+      } else if (allAnsweredAt !== null) {
+        // Only measure offers that ended in the forced cancel: an accept or a
+        // confirmable counter closes via `bestConfirmPartner` on its own and
+        // never consults the window (see the test above).
+        const responses = Object.values(lastResponses ?? {})
+        if (responses.every((r) => r.kind !== 'accept' && r.kind !== 'counter')) {
+          idleMs = Date.now() - allAnsweredAt
+          break
+        }
+        allAnsweredAt = null
+        lastResponses = null
+      }
+      if (view.seq !== lastActedSeq) {
+        const intent = humanScriptIntent(view)
+        if (intent) {
+          c.send(MSG.INTENT, intent)
+          lastActedSeq = view.seq
+        }
+      }
+      await settle(25)
+    }
+
+    expect(idleMs).not.toBeNull()
+    expect(idleMs!).toBeLessThan(1_000)
+  })
 })
