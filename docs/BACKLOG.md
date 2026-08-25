@@ -143,6 +143,7 @@ idle (banner frozen on the same bot's name) for the rest of the budget —
 Not diagnosed further this session (could be turn-count, could be a stall);
 worth a focused look before this reads as normal pacing to real players —
 a human partner would be waiting minutes per bot turn in a real match.
+**— RESOLVED (2026-08-25).** Root cause: offer window idle 10s after every seat answered; fix: resolve offer once last seat answers (a37bc21); turn time improved 6.1s→4.4s.
 
 **Finding (blocks a clean "E2E all green"): `e2e/bots.spec.ts`'s solo-match
 test is flaky, not just slow — 4 of 5 runs during this session's
@@ -173,6 +174,7 @@ bot timers are actually firing late or the intent itself is silently
 rejected by `applyAndBroadcast`. Not fixed this session — out of scope for
 a playtest sweep and too load-bearing to touch right before the whole-branch
 review.
+**— RESOLVED (2026-08-25).** Root cause: stale dev servers silently reused by Playwright across worktrees; fix: suite starts its own servers, no reuse (dcd95d8); test passes 11/11 on clean runs.
 
 **Finding: a transient `window.__meridianDebug` dropout crashed the first
 sweep attempt.** ~15.6 minutes into a `vp=10` run, a `page.evaluate` call
