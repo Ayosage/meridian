@@ -2,11 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { coordKey, vertexId } from '../../src/index'
 import {
   applyCatanIntent, bankTradePlan, buildGoal, companionIntent, COMPANION_DEFAULTS,
-  createCatanGame, createRng, greedyDiscard, isCatanRuleError, legalSettlementVertices,
+  createCatanGame, createRng, greedyDiscard, isCatanRuleError, legalRoadEdges, legalSettlementVertices,
   missingForGoal, pips, publicVp, robberHexScore, vertexPips as vp, vertexPips,
-  type CatanState,
+  type CatanState, type DevCard,
 } from '../../src/index'
 import { die, inMain, mustApply, setupComplete, stubRng, withResources } from './helpers'
+
+/** Test surgery: put a card in a player's hand as if bought on an earlier turn. */
+function withCard(state: CatanState, player: number, card: DevCard, boughtOnTurn = 0): CatanState {
+  const players = state.players.map((p, i) =>
+    i === player ? { ...p, devCards: [...p.devCards, { card, boughtOnTurn }] } : p,
+  )
+  return { ...state, players }
+}
 
 describe('companion heuristics', () => {
   it('pips: ways to roll the token', () => {
@@ -123,6 +131,22 @@ describe('companionIntent decisions', () => {
     const state = withResources(inMain(), 0, { sheep: 1, wheat: 1, ore: 1 })
     const intent = companionIntent(state, 0, createRng(0))!
     expect(intent.type).toBe('buyDevCard')
+  })
+
+  it('main: does not play roadBuilding when fewer legal edges exist than the engine requires', () => {
+    // roadsLeft(13) needs 2 edges; choke the network down to exactly 1 legal edge
+    let state = inMain()
+    const seat = 0
+    const legal = legalRoadEdges(state, seat)
+    expect(legal.length).toBeGreaterThan(1) // sanity: normally more than one edge is open
+    const otherSeat = (seat + 1) % 4
+    const roads = { ...state.roads }
+    for (const e of legal.slice(1)) roads[e] = otherSeat
+    state = { ...state, roads }
+    expect(legalRoadEdges(state, seat)).toEqual([legal[0]])
+    state = withCard(state, seat, 'roadBuilding', 0)
+    const intent = companionIntent(state, seat, createRng(0))!
+    expect(intent).not.toMatchObject({ type: 'playDevCard', card: 'roadBuilding' })
   })
 
   it('main: bank-trades 4-surplus toward the goal deficit, honoring the opts cap', () => {

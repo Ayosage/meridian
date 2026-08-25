@@ -223,8 +223,10 @@ function mainPhase(state: CatanState, seat: PlayerId, opts: CompanionOpts): Cata
     const playable = (card: string) => me.devCards.some((c) => c.card === card && c.boughtOnTurn < t.number)
     if (playable('knight')) return { type: 'playDevCard', player: seat, card: 'knight' }
     if (playable('roadBuilding') && me.roadsLeft > 0) {
-      const edges = legalRoadEdges(state, seat).slice(0, Math.min(2, me.roadsLeft))
-      if (edges.length) return { type: 'playDevCard', player: seat, card: 'roadBuilding', edges }
+      // the engine requires exactly `required` edges — a short snapshot means wait, not partial-play
+      const required = Math.min(2, me.roadsLeft)
+      const edges = legalRoadEdges(state, seat).slice(0, required)
+      if (edges.length === required) return { type: 'playDevCard', player: seat, card: 'roadBuilding', edges }
     }
     if (playable('yearOfPlenty')) {
       const take = plentyPicks(state, seat)
