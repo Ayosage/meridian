@@ -4,7 +4,9 @@ import {
   spiralCoords,
   vertexId,
   edgeId,
+  type CatanBoard,
   type EdgeId,
+  type Port,
   type VertexId,
 } from '@meridian/rules'
 import { coordToWorld, TILE_SIZE } from '../layout'
@@ -57,4 +59,45 @@ export function edgeWorld(): ReadonlyMap<EdgeId, { pos: [number, number, number]
     }
   }
   return ew
+}
+
+export interface PortPlacement {
+  key: string
+  position: [number, number, number]
+  /** Unit vector from the board center (origin) outward through the port's two-vertex midpoint. */
+  outX: number
+  outZ: number
+  kind: Port['kind']
+}
+
+/**
+ * World placement for every board port: its two-vertex midpoint pushed
+ * `push` units outward from the board center, at tile height. Shared by
+ * the port boat (Pieces.tsx) and its rate sign (PortSign.tsx) so both read
+ * off the same math — only `push` differs between them.
+ */
+export function portWorld(
+  board: CatanBoard,
+  vw: ReadonlyMap<VertexId, [number, number, number]>,
+  push: number,
+): PortPlacement[] {
+  const out: PortPlacement[] = []
+  board.ports.forEach((port, i) => {
+    const a = vw.get(port.vertices[0])
+    const b = vw.get(port.vertices[1])
+    if (!a || !b) return
+    const midX = (a[0] + b[0]) / 2
+    const midZ = (a[2] + b[2]) / 2
+    const len = Math.hypot(midX, midZ) || 1
+    const outX = midX / len
+    const outZ = midZ / len
+    out.push({
+      key: `${port.vertices[0]}-${port.vertices[1]}-${i}`,
+      position: [midX + outX * push, TILE_TOP, midZ + outZ * push],
+      outX,
+      outZ,
+      kind: port.kind,
+    })
+  })
+  return out
 }

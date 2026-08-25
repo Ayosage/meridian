@@ -2,8 +2,9 @@ import { useMemo } from 'react'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import type { CatanBoard, CatanClientState, EdgeId, VertexId } from '@meridian/rules'
-import { edgeWorld, TILE_TOP, vertexWorld } from './catanLayout'
+import { edgeWorld, portWorld, vertexWorld } from './catanLayout'
 import { RESOURCE_COLORS, seatColor } from './palette'
+import { PortSigns } from './PortSign'
 
 const ASSETS = '/assets/slice'
 /** How far a port is pushed out from its two-vertex midpoint, away from the board center. */
@@ -108,34 +109,26 @@ function Roads({ roads }: { roads: CatanClientState['roads'] }) {
 function Ports({ board }: { board: CatanBoard }) {
   const portSrc = useSliceGltf('port')
   const vw = vertexWorld()
+  const placements = useMemo(() => portWorld(board, vw, PORT_PUSH), [board, vw])
   return (
     <>
-      {board.ports.map((port, i) => {
-        const a = vw.get(port.vertices[0])
-        const b = vw.get(port.vertices[1])
-        if (!a || !b) return null
-        const midX = (a[0] + b[0]) / 2
-        const midZ = (a[2] + b[2]) / 2
-        const len = Math.hypot(midX, midZ) || 1
-        // unit vector from board center (origin) outward through the midpoint
-        const outX = midX / len
-        const outZ = midZ / len
-        const position: [number, number, number] = [midX + outX * PORT_PUSH, TILE_TOP, midZ + outZ * PORT_PUSH]
+      {placements.map((p) => {
         // face the board center: rotate so the model's local -Z axis (its
         // export-convention "front") points back toward the origin
-        const rotation: [number, number, number] = [0, Math.atan2(outX, outZ), 0]
-        const color = port.kind === 'generic' ? null : RESOURCE_COLORS[port.kind]
+        const rotation: [number, number, number] = [0, Math.atan2(p.outX, p.outZ), 0]
+        const color = p.kind === 'generic' ? null : RESOURCE_COLORS[p.kind]
         return (
           <TintedPiece
-            key={`${port.vertices[0]}-${port.vertices[1]}-${i}`}
+            key={p.key}
             source={portSrc}
             color={color}
             matchName="sail"
-            position={position}
+            position={p.position}
             rotation={rotation}
           />
         )
       })}
+      <PortSigns placements={placements} />
     </>
   )
 }
