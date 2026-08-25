@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { CatanClientIntent, CatanSnapshotPayload } from '@meridian/protocol'
+import type { CatanClientIntent, CatanEvent, CatanSnapshotPayload } from '@meridian/protocol'
 import {
   coordKey,
   legalCityVertices,
@@ -244,6 +244,8 @@ interface CatanState {
   roomId: string | null
   seat: number | null
   view: CatanClientState | null
+  /** Action log: server-derived events, newest first, capped (ActionLog ticker). */
+  eventLog: readonly CatanEvent[]
   toast: string | null
   winner: CatanMatchResult | null
   mode: Mode
@@ -374,6 +376,7 @@ const INITIAL = {
   roomId: null as string | null,
   seat: null as number | null,
   view: null as CatanClientState | null,
+  eventLog: [] as readonly CatanEvent[],
   toast: null as string | null,
   winner: null as CatanMatchResult | null,
   mode: IDLE_MODE,
@@ -420,8 +423,12 @@ export const useCatanStore = create<CatanState>((set, get) => ({
     // staged selections are done with; a resolved/cancelled trade clears drafts.
     const ownOfferPosted = !hadOpenTrade && hasOpenTrade && payload.view.turn.current === seat
     const resetStaging = tradeResolved || ownOfferPosted
+    const eventLog = payload.events?.length
+      ? [...payload.events].reverse().concat(get().eventLog).slice(0, 100)
+      : get().eventLog
     set({
       view: payload.view,
+      eventLog,
       mode: nextMode,
       status: payload.view.winner !== null ? 'ended' : 'playing',
       discardSelection: enteringDiscard ? EMPTY_DISCARD : discardSelection,

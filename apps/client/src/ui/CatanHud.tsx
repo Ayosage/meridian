@@ -4,6 +4,7 @@ import { leaveCatanMatch, sendCatanIntent } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
 import { playerCards } from '../scene/catan/hudLogic'
 import { seatColor } from '../scene/catan/palette'
+import { ActionLog } from './ActionLog'
 import { ResourceIcon } from './ResourceIcon'
 // Only App.tsx imports hud.css today; this also mounts standalone wherever
 // CatanHud is used, so it owns its own stylesheet dependency rather than
@@ -156,7 +157,10 @@ export function CatanHud() {
         END TURN
       </button>
       <HandStrip view={view} />
-      <PlayerStrip view={view} seat={seat} connected={connected} />
+      <div className="right-rail">
+        <PlayerStrip view={view} seat={seat} connected={connected} />
+        <ActionLog />
+      </div>
       <Toast />
       <WinOverlay view={view} />
     </div>
