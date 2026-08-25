@@ -49,7 +49,7 @@ const RAFT_LATERAL_OFFSET = 0.45
 // see assets/slice.blend's piece_raft collection). A small margin above
 // WATER_Y keeps the deck's own bottom from z-fighting the water plane.
 const RAFT_Y_MARGIN = 0.015
-const RAFT_DECK_HEIGHT = 0.055
+const RAFT_DECK_HEIGHT = 0.07
 const RAFT_ORIGIN_Y = WATER_Y + RAFT_Y_MARGIN
 const RAFT_TOP_Y = RAFT_ORIGIN_Y + RAFT_DECK_HEIGHT
 
