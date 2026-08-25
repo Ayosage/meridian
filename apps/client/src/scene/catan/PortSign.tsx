@@ -145,11 +145,22 @@ function RaftInstances({
   )
 }
 
+/**
+ * Content faces straight up into a low-elevation sun (~20°, see rig.tsx):
+ * a horizontal face gets a much more grazing, dimmer hit of direct light
+ * than the vertical faces the rest of the rig's assets are tuned for, so
+ * mid-brightness RESOURCE_COLORS values (ore's slate gray in particular)
+ * read muddier here than their raw hex would suggest. A flat multiplier on
+ * the baked vertex color compensates without touching the shared palette
+ * or the rig's lighting (both used well beyond this one layer).
+ */
+const CONTENT_BRIGHTNESS = 1.3
+
 /** Uniform-color clone of a base (uncolored) geometry — reused to bake a different tint per port onto the same rate-text shape. */
 function colorize(base: THREE.BufferGeometry, hex: string): THREE.BufferGeometry {
   const geo = base.clone()
   const count = geo.attributes['position']!.count
-  const c = SCRATCH_COLOR.set(hex)
+  const c = SCRATCH_COLOR.set(hex).multiplyScalar(CONTENT_BRIGHTNESS)
   const arr = new Float32Array(count * 3)
   for (let i = 0; i < count; i++) {
     arr[i * 3] = c.r
@@ -222,10 +233,11 @@ function buildIconGeometry(resource: Resource, loader: SVGLoader): THREE.BufferG
       if (pathIndex > 0) geo.translate(0, 0, SHADOW_Z_NUDGE_RAW)
       const count = geo.attributes['position']!.count
       const arr = new Float32Array(count * 3)
+      const c = SCRATCH_COLOR.copy(path.color).multiplyScalar(CONTENT_BRIGHTNESS)
       for (let i = 0; i < count; i++) {
-        arr[i * 3] = path.color.r
-        arr[i * 3 + 1] = path.color.g
-        arr[i * 3 + 2] = path.color.b
+        arr[i * 3] = c.r
+        arr[i * 3 + 1] = c.g
+        arr[i * 3 + 2] = c.b
       }
       geo.setAttribute('color', new THREE.BufferAttribute(arr, 3))
       parts.push(geo)
