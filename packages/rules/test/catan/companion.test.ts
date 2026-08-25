@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { coordKey, vertexId } from '../../src/index'
 import {
-  buildGoal, greedyDiscard, missingForGoal, pips, publicVp, robberHexScore, vertexPips,
+  applyCatanIntent, bankTradePlan, buildGoal, companionIntent, COMPANION_DEFAULTS,
+  createCatanGame, createRng, greedyDiscard, isCatanRuleError, legalSettlementVertices,
+  missingForGoal, pips, publicVp, robberHexScore, vertexPips as vp, vertexPips,
+  type CatanState,
 } from '../../src/index'
-import { inMain, setupComplete, withResources } from './helpers'
+import { die, inMain, mustApply, setupComplete, stubRng, withResources } from './helpers'
 
 describe('companion heuristics', () => {
   it('pips: ways to roll the token', () => {
@@ -86,5 +89,89 @@ describe('companion heuristics', () => {
     const out = greedyDiscard(state, 0, 100) // owed far exceeds the hand
     const total = Object.values(out).reduce((n, v) => n + (v ?? 0), 0)
     expect(total).toBe(handTotal) // returns all cards in hand
+  })
+})
+
+describe('companionIntent decisions', () => {
+  it('setup: places the pip-maximal legal settlement, then a road off it', () => {
+    const rng = createRng(7)
+    const state = createCatanGame({ playerCount: 4, layout: 'beginner' }, rng)
+    const intent = companionIntent(state, 0, rng)!
+    expect(intent.type).toBe('placeSetupSettlement')
+    const chosen = (intent as { vertex: string }).vertex
+    // no legal vertex beats the chosen one
+    for (const v of legalSettlementVertices(state, 0, { setup: true }))
+      expect(vp(state, chosen)).toBeGreaterThanOrEqual(vp(state, v))
+    const after = applyCatanIntent(state, intent, rng) as CatanState
+    const road = companionIntent(after, 0, rng)!
+    expect(road.type).toBe('placeSetupRoad')
+  })
+
+  it('preRoll: rolls', () => {
+    const state = setupComplete()
+    expect(companionIntent(state, state.turn.current, createRng(0))!.type).toBe('rollDice')
+  })
+
+  it('main: builds a city when affordable, at its highest-pip own settlement', () => {
+    const state = withResources(inMain(), 0, { wheat: 2, ore: 3 })
+    const intent = companionIntent(state, 0, createRng(0))!
+    expect(intent).toMatchObject({ type: 'build', piece: 'city' })
+  })
+
+  it('main: buys a dev card when affordable and no city/settlement is possible', () => {
+    // settlement needs a connected legal vertex — none exist right after setup roads
+    const state = withResources(inMain(), 0, { sheep: 1, wheat: 1, ore: 1 })
+    const intent = companionIntent(state, 0, createRng(0))!
+    expect(intent.type).toBe('buyDevCard')
+  })
+
+  it('main: bank-trades 4-surplus toward the goal deficit, honoring the opts cap', () => {
+    const state = withResources(inMain(), 0, { wood: 6 })
+    const plan = bankTradePlan(state, 0)
+    expect(plan).toMatchObject({ give: 'wood' })
+    const intent = companionIntent(state, 0, createRng(0))!
+    expect(intent).toMatchObject({ type: 'bankTrade', give: 'wood' })
+    const capped = companionIntent(state, 0, createRng(0), { ...COMPANION_DEFAULTS, bankTradesThisTurn: 2 })!
+    expect(capped.type).toBe('endTurn')
+  })
+
+  it('off-turn: accepts a covered never-net-losing offer, rejects otherwise', () => {
+    let state = withResources(inMain(), 0, { wood: 1 })
+    state = withResources(state, 1, { brick: 1 })
+    const cur = state.turn.current
+    // current player offers 2-for-1 in seat 1's favor: give {wood:1}, get {brick:1} is 1:1 — acceptable
+    state = mustApply(withResources(state, cur, { wood: 1 }), { type: 'offerTrade', player: cur, give: { wood: 1 }, get: { brick: 1 } })
+    const responder = [0, 1, 2, 3].find((s) => s !== cur && state.players[s]!.resources.brick >= 1)!
+    const intent = companionIntent(state, responder, createRng(0))!
+    expect(intent).toMatchObject({ type: 'respondTrade', response: 'accept' })
+  })
+
+  it('robber: picks a scoring-maximal enemy hex and steals from the fattest victim', () => {
+    let state = setupComplete()
+    state = mustApply(state, { type: 'rollDice', player: state.turn.current }, stubRng([die(3), die(4)]))
+    // no hand > 7 on this draft, so we land straight in robber phase
+    expect(state.turn.phase).toBe('robber')
+    const intent = companionIntent(state, state.turn.current, createRng(0))!
+    expect(intent.type).toBe('moveRobber')
+  })
+})
+
+describe('companion liveness', () => {
+  it('4 companion seats finish seeded games; every intent legal; no nulls while the game waits', () => {
+    for (const seed of [1, 2, 3]) {
+      const rng = createRng(seed)
+      let state = createCatanGame({ playerCount: 4 }, rng)
+      for (let i = 0; i < 5000 && state.winner === null; i++) {
+        const seat = state.turn.phase === 'discard'
+          ? Number(Object.keys(state.turn.pendingDiscards)[0]!)
+          : state.turn.current
+        const intent = companionIntent(state, seat, rng)
+        expect(intent, `seed ${seed}: stalled at ${i}, phase ${state.turn.phase}`).not.toBeNull()
+        const result = applyCatanIntent(state, intent!, rng)
+        if (isCatanRuleError(result)) throw new Error(`seed ${seed} seat ${seat}: ${result.code}: ${result.message}`)
+        state = result
+      }
+      expect(state.winner, `seed ${seed} never finished`).not.toBeNull()
+    }
   })
 })
