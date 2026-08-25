@@ -14,7 +14,8 @@ import {
   type CompanionOpts,
   type Rng,
 } from '@meridian/rules'
-import { catanIntentSchema, MSG, type CatanSnapshotPayload } from '@meridian/protocol'
+import { catanIntentSchema, MSG, type CatanEvent, type CatanSnapshotPayload } from '@meridian/protocol'
+import { deriveCatanEvents, redactEventForSeat } from '../events'
 import { pilotIntent } from '../pilot'
 import { CatanLobbyState } from '../schema/CatanLobbyState'
 import { generateRoomId, releaseRoomId } from '../room-id'
@@ -156,8 +157,9 @@ export class CatanRoom extends Room<CatanLobbyState> {
       this.schedulePilot()
       return
     }
+    const before = this.game
     this.game = result
-    this.broadcastViews()
+    this.broadcastViews(deriveCatanEvents(before, intent, result))
     if (this.game.winner !== null) {
       this.state.phase = 'ended'
       this.broadcast(MSG.MATCH_ENDED, { reason: 'win', winner: this.game.winner })
@@ -166,7 +168,7 @@ export class CatanRoom extends Room<CatanLobbyState> {
     this.syncOfferWindow()
   }
 
-  private broadcastViews() {
+  private broadcastViews(events?: readonly CatanEvent[]) {
     if (!this.game) return
     for (let seat = 0; seat < this.seatClients.length; seat++) {
       const client = this.seatClients[seat]
@@ -174,6 +176,9 @@ export class CatanRoom extends Room<CatanLobbyState> {
       const payload: CatanSnapshotPayload = {
         seq: this.game.seq,
         view: redactCatanState(this.game, seat),
+        ...(events && events.length > 0
+          ? { events: events.map((e) => redactEventForSeat(e, seat)) }
+          : {}),
       }
       client.send(MSG.SNAPSHOT, payload)
     }

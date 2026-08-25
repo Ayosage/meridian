@@ -115,8 +115,42 @@ const catanIntentWithoutDevSchema = z.discriminatedUnion('type', [
 export const catanIntentSchema = z.union([catanIntentWithoutDevSchema, playDevCardSchema])
 export type CatanClientIntent = z.infer<typeof catanIntentSchema>
 
+// ---------------------------------------------------------------------------
+// Game events (action log)
+
+type Resource = (typeof resourceNames)[number]
+type ResourceMap = Partial<Record<Resource, number>>
+
+/**
+ * One game happening, derived server-side from (state-before, intent,
+ * state-after) at the room's single apply choke point and shipped with the
+ * snapshot broadcast. Events are PRE-REDACTED per seat before sending: the
+ * optional secret fields (`discard.resources`, `robber.stolen`) are present
+ * only for the seats allowed to know them — an event never says more than
+ * the seat's own snapshot could reveal.
+ */
+export type CatanEvent =
+  | { kind: 'roll'; player: number; dice: readonly [number, number]; total: number; gains: Readonly<Record<number, ResourceMap>> }
+  | { kind: 'discard'; player: number; count: number; resources?: ResourceMap }
+  | { kind: 'robber'; player: number; victim: number | null; stolen?: Resource }
+  | { kind: 'monopoly'; player: number; resource: Resource; taken: Readonly<Record<number, number>> }
+  | { kind: 'yearOfPlenty'; player: number; take: readonly [Resource, Resource] }
+  | { kind: 'roadBuilding'; player: number; edges: number }
+  | { kind: 'knight'; player: number }
+  | { kind: 'buyDev'; player: number }
+  | { kind: 'build'; player: number; piece: 'road' | 'settlement' | 'city' }
+  | { kind: 'bankTrade'; player: number; give: Resource; giveCount: number; get: Resource }
+  | { kind: 'offer'; player: number; give: ResourceMap; get: ResourceMap }
+  | { kind: 'tradeResponse'; player: number; response: 'accept' | 'reject' | 'counter' }
+  | { kind: 'tradeSettled'; player: number; partner: number; gave: ResourceMap; got: ResourceMap }
+  | { kind: 'offerCancelled'; player: number }
+  | { kind: 'turnEnded'; player: number; turn: number }
+  | { kind: 'win'; player: number }
+
 /** Server -> client per-seat snapshot (server design spec §2/§5). */
 export interface CatanSnapshotPayload {
   seq: number
   view: CatanClientState
+  /** What the applied intent did, pre-redacted for this seat. Absent on resync/initial snapshots. */
+  events?: readonly CatanEvent[]
 }
