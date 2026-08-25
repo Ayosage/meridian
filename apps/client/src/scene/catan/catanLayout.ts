@@ -12,6 +12,13 @@ import {
 import { coordToWorld, TILE_SIZE } from '../layout'
 
 export const TILE_TOP = 0.22
+/**
+ * Ocean surface height — single source of truth shared by CatanScene.tsx
+ * (the water mesh itself) and PortSign.tsx (which anchors its posts below
+ * this line and its plaque above it). Kept here rather than in CatanScene
+ * to avoid a CatanScene -> Pieces -> PortSign -> CatanScene import cycle.
+ */
+export const WATER_Y = 0.05
 
 function centroid3(a: [number, number, number], b: typeof a, c: typeof a): [number, number, number] {
   return [(a[0] + b[0] + c[0]) / 3, TILE_TOP, (a[2] + b[2] + c[2]) / 3]

@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { coordKey, type CatanBoard as CatanBoardData, type CatanClientState } from '@meridian/rules'
 import { coordToWorld } from '../layout'
 import { CatanBoard } from './CatanBoard'
-import { edgeWorld, TILE_TOP, vertexWorld } from './catanLayout'
+import { edgeWorld, TILE_TOP, vertexWorld, WATER_Y } from './catanLayout'
 import { legalEdgesForMode, legalVerticesForMode, useCatanStore } from './catanStore'
 import { Highlights } from './Highlights'
 import { PickLayer } from './PickLayer'
@@ -20,7 +20,6 @@ import { GoldenHourRig, SkyBackdrop } from './rig'
  * Rig/water/post are promoted from the approved beauty slice (Task 8).
  */
 
-const WATER_Y = 0.05
 const WATER_SIZE = 28
 
 /**

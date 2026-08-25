@@ -9,8 +9,12 @@ const LABELS: Record<Resource, string> = {
   ore: 'Ore',
 }
 
-/** Multiplies each RGB channel by `factor` — the icon's second (shadow) fill. */
-function shade(hex: string, factor: number): string {
+/**
+ * Multiplies each RGB channel by `factor` — the icon's second (shadow)
+ * fill. Exported so the 3D port sign (PortSign.tsx) bakes the identical
+ * two-tone tint onto its extruded icon geometry — one shading formula.
+ */
+export function shadeResourceColor(hex: string, factor: number): string {
   const n = parseInt(hex.slice(1), 16)
   const r = Math.round(((n >> 16) & 255) * factor)
   const g = Math.round(((n >> 8) & 255) * factor)
@@ -20,10 +24,13 @@ function shade(hex: string, factor: number): string {
 
 /**
  * Silhouette path data per resource: [main fill, shadow fill]. Flat,
- * two-tone, single-viewBox-unit glyphs — no gradients, no strokes. Each
- * `d` may hold several `M…Z` subpaths (still one fill, one <path>).
+ * two-tone, single-viewBox-unit (0..24) glyphs — no gradients, no strokes.
+ * Each `d` may hold several `M…Z` subpaths (still one fill, one <path>).
+ * Exported as the single source of truth for the icon shapes: the 3D port
+ * sign (PortSign.tsx) converts this same path data to extruded geometry
+ * via SVGLoader rather than hand-forking the silhouettes.
  */
-const GLYPHS: Record<Resource, { main: string; shadow: string }> = {
+export const RESOURCE_ICON_PATHS: Record<Resource, { main: string; shadow: string }> = {
   // Pine tree: stepped zigzag canopy over a short trunk.
   wood: {
     main: 'M12 2 L16 8 L13.3 8 L17.6 14.3 L14.3 14.3 L20 21 L4 21 L9.7 14.3 L6.4 14.3 L10.7 8 L8 8 Z',
@@ -66,7 +73,7 @@ const GLYPHS: Record<Resource, { main: string; shadow: string }> = {
  * color association with the existing palette survives.
  */
 export function ResourceIcon({ r, className }: { r: Resource; className?: string }) {
-  const glyph = GLYPHS[r]
+  const glyph = RESOURCE_ICON_PATHS[r]
   const main = RESOURCE_COLORS[r]
   return (
     <svg
@@ -79,7 +86,7 @@ export function ResourceIcon({ r, className }: { r: Resource; className?: string
     >
       <title>{LABELS[r]}</title>
       <path d={glyph.main} fill={main} />
-      <path d={glyph.shadow} fill={shade(main, 0.62)} />
+      <path d={glyph.shadow} fill={shadeResourceColor(main, 0.62)} />
     </svg>
   )
 }
