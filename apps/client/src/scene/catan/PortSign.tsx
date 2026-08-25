@@ -26,6 +26,16 @@ const PLAQUE_H = 0.4
 const TEXT_GAP = 0.01
 const TEXT_Y_OFFSET = PLAQUE_D / 2 + TEXT_DEPTH / 2 + TEXT_GAP
 
+// Resource-tinted rate text alone doesn't disambiguate close hues at a
+// glance (wood #2d5a27 vs sheep #8fbc5a are both thin glyph strokes) —
+// a full-width band along the plaque's top edge gives the resource cue
+// real surface area, same "proud" clearance discipline as the text.
+const BAND_H = 0.1
+const BAND_D = 0.02
+const BAND_GAP = 0.01
+const BAND_Y_OFFSET = PLAQUE_D / 2 + BAND_GAP + BAND_D / 2
+const BAND_Z_OFFSET = PLAQUE_H / 2 - BAND_H / 2
+
 /** Signs float above the board and must not steal PickLayer's vertex/edge/hex raycasts. */
 function noRaycast() {}
 
@@ -79,16 +89,20 @@ function SignInstances({
 /**
  * Rate signs for every port: a cream plaque floating above each boat with
  * the trade rate ("2:1"/"3:1") extruded on its face, tinted by resource for
- * resource ports and ink-neutral for generic ones. Text lies flat facing up
- * (rotateX bakes the extrude axis onto world +Y) so it reads under the
- * board's fixed oblique camera the same way the token-numeral discs do —
- * no per-port rotation, no billboarding, matching that established asset's
- * static-after-mount instancing (docs/PERF.md budget: 9 signs, ~3 draw calls).
+ * resource ports and ink-neutral for generic ones, plus a resource-colored
+ * band across the plaque's top edge — real surface area, not just a thin
+ * glyph stroke, so close hues (e.g. wood vs sheep) stay unambiguous. Text
+ * and band lie flat facing up (rotateX bakes the extrude axis onto world
+ * +Y) so they read under the board's fixed oblique camera the same way the
+ * token-numeral discs do — no per-port rotation, no billboarding, matching
+ * that established asset's static-after-mount instancing (docs/PERF.md
+ * budget: 9 signs, 4 draw calls: plaque, band, "2:1" text, "3:1" text).
  */
 export function PortSigns({ placements }: { placements: readonly PortPlacement[] }) {
   const font = useLoader(FontLoader, FONT_URL)
 
   const plaqueGeometry = useMemo(() => new THREE.BoxGeometry(PLAQUE_W, PLAQUE_D, PLAQUE_H), [])
+  const bandGeometry = useMemo(() => new THREE.BoxGeometry(PLAQUE_W, BAND_D, BAND_H), [])
   const plaqueMaterial = useMemo(
     () => new THREE.MeshStandardMaterial({ color: PLAQUE_CREAM, roughness: 0.7 }),
     [],
@@ -138,10 +152,16 @@ export function PortSigns({ placements }: { placements: readonly PortPlacement[]
     () => genericPorts.map((p): [number, number, number] => [p.position[0], textY, p.position[2]]),
     [genericPorts, textY],
   )
+  const bandY = TILE_TOP + SIGN_LIFT + BAND_Y_OFFSET
+  const bandPositions = useMemo(
+    () => resourcePorts.map((p): [number, number, number] => [p.position[0], bandY, p.position[2] - BAND_Z_OFFSET]),
+    [resourcePorts, bandY],
+  )
 
   return (
     <>
       <SignInstances geometry={plaqueGeometry} material={plaqueMaterial} positions={plaquePositions} />
+      <SignInstances geometry={bandGeometry} material={tintableMaterial} positions={bandPositions} colors={resourceColors} />
       <SignInstances
         geometry={rateGeometry.twoToOne}
         material={tintableMaterial}
