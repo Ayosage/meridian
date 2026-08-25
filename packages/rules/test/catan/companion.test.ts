@@ -300,6 +300,96 @@ describe('companion liveness', () => {
 })
 
 /**
+ * Rank (1 = leader, 3 = last place) of every seat OTHER than `mover`, by
+ * current public VP. Ties keep seat order (stable sort) — fine for tallying.
+ */
+function opponentRanks(state: CatanState, mover: number): Map<number, number> {
+  const others = [0, 1, 2, 3].filter((s) => s !== mover)
+  others.sort((a, b) => publicVp(state, b) - publicVp(state, a))
+  const ranks = new Map<number, number>()
+  others.forEach((seat, i) => ranks.set(seat, i + 1))
+  return ranks
+}
+
+/**
+ * Runs seeded 4-companion games to completion (liveness-loop idiom above),
+ * tallying by opponent-VP-rank every `moveRobber` intent's target: the steal
+ * victim when there is one, else every adjacent enemy owner (a robber move
+ * with no payable victim still "targets" whoever's production it blocks).
+ */
+function tallyRobberTargets(seeds: readonly number[]): Record<number, number> {
+  const tally: Record<number, number> = { 1: 0, 2: 0, 3: 0 }
+  for (const seed of seeds) {
+    const rng = createRng(seed)
+    let state = createCatanGame({ playerCount: 4 }, rng)
+    let turnNumber = state.turn.number
+    let proposedThisTurn = [false, false, false, false]
+    let bankTradesThisTurn = [0, 0, 0, 0]
+    for (let i = 0; i < 5000 && state.winner === null; i++) {
+      if (state.turn.number !== turnNumber) {
+        turnNumber = state.turn.number
+        proposedThisTurn = [false, false, false, false]
+        bankTradesThisTurn = [0, 0, 0, 0]
+      }
+      let seat: number
+      let opts = COMPANION_DEFAULTS
+      if (state.turn.phase === 'discard') {
+        seat = Number(Object.keys(state.turn.pendingDiscards)[0]!)
+      } else if (state.turn.openTrade) {
+        const offer = state.turn.openTrade
+        const pending = [0, 1, 2, 3].filter((s) => s !== state.turn.current && offer.responses[s] === undefined)
+        if (pending.length > 0) {
+          seat = pending[0]!
+        } else {
+          seat = state.turn.current
+          opts = { proposedThisTurn: proposedThisTurn[seat]!, bankTradesThisTurn: bankTradesThisTurn[seat]!, resolveOfferNow: true }
+        }
+      } else {
+        seat = state.turn.current
+        opts = { proposedThisTurn: proposedThisTurn[seat]!, bankTradesThisTurn: bankTradesThisTurn[seat]!, resolveOfferNow: false }
+      }
+      const intent = companionIntent(state, seat, rng, opts)
+      expect(intent, `seed ${seed}: stalled at ${i}, phase ${state.turn.phase}`).not.toBeNull()
+      if (intent!.type === 'moveRobber') {
+        const ranks = opponentRanks(state, seat)
+        const targets: number[] = []
+        if (intent!.stealFrom !== null) {
+          targets.push(intent!.stealFrom)
+        } else {
+          const hexKey = coordKey(intent!.hex)
+          const owners = new Set<number>()
+          for (const v of standardTopology().hexVertices[hexKey] ?? []) {
+            const b = state.buildings[v]
+            if (b && b.owner !== seat) owners.add(b.owner)
+          }
+          targets.push(...owners)
+        }
+        for (const target of targets) {
+          const rank = ranks.get(target)
+          if (rank !== undefined) tally[rank] = (tally[rank] ?? 0) + 1
+        }
+      }
+      if (intent!.type === 'offerTrade') proposedThisTurn[seat] = true
+      if (intent!.type === 'bankTrade') bankTradesThisTurn[seat] = bankTradesThisTurn[seat]! + 1
+      const result = applyCatanIntent(state, intent!, rng)
+      if (isCatanRuleError(result)) throw new Error(`seed ${seed} seat ${seat}: ${result.code}: ${result.message}`)
+      state = result
+    }
+    expect(state.winner, `seed ${seed} never finished`).not.toBeNull()
+  }
+  return tally
+}
+
+describe('companion robber targeting (empirical)', () => {
+  it('robs the current VP leader (among opponents) strictly more than the current last-place opponent', () => {
+    const tally = tallyRobberTargets([1, 2, 3, 4, 5])
+    // eslint-disable-next-line no-console -- the user wants to SEE the tallies (task-14 brief)
+    console.log('robber target tally by opponent-VP-rank (1=leader..3=last):', tally)
+    expect(tally[1]).toBeGreaterThan(tally[3]!)
+  })
+})
+
+/**
  * A driven seat has no client to correct it: an intent naming a location the
  * engine rejects strands that seat (see CatanRoom.applyAndBroadcast). So every
  * branch here must decline outright rather than emit a null/undefined location.
