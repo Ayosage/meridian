@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { coordKey, vertexId } from '../../src/index'
 import {
-  applyCatanIntent, bankTradePlan, buildGoal, companionIntent, COMPANION_DEFAULTS,
+  applyCatanIntent, bankTradePlan, bestConfirmPartner, buildGoal, companionIntent, COMPANION_DEFAULTS,
   createCatanGame, createRng, greedyDiscard, isCatanRuleError, legalRoadEdges, legalSettlementVertices,
-  missingForGoal, pips, publicVp, robberHexScore, vertexPips as vp, vertexPips,
-  type CatanState, type DevCard,
+  missingForGoal, pips, proposalPlan, publicVp, RESOURCES, robberHexScore, vertexPips as vp, vertexPips,
+  type CatanState, type DevCard, type ResourceCount,
 } from '../../src/index'
 import { die, inMain, mustApply, setupComplete, stubRng, withResources } from './helpers'
 
@@ -14,6 +14,14 @@ function withCard(state: CatanState, player: number, card: DevCard, boughtOnTurn
     i === player ? { ...p, devCards: [...p.devCards, { card, boughtOnTurn }] } : p,
   )
   return { ...state, players }
+}
+
+/** Test surgery: set a player's hand to exactly these counts (not additive like withResources). */
+function exactHand(state: CatanState, player: number, resources: Partial<ResourceCount>): CatanState {
+  const cur = state.players[player]!.resources
+  const delta: Partial<ResourceCount> = {}
+  for (const r of RESOURCES) delta[r] = (resources[r] ?? 0) - cur[r]
+  return withResources(state, player, delta)
 }
 
 describe('companion heuristics', () => {
@@ -153,9 +161,10 @@ describe('companionIntent decisions', () => {
     const state = withResources(inMain(), 0, { wood: 6 })
     const plan = bankTradePlan(state, 0)
     expect(plan).toMatchObject({ give: 'wood' })
-    const intent = companionIntent(state, 0, createRng(0))!
+    // proposedThisTurn: true — the wood surplus would otherwise fire the (higher-priority) trade proposal first
+    const intent = companionIntent(state, 0, createRng(0), { ...COMPANION_DEFAULTS, proposedThisTurn: true })!
     expect(intent).toMatchObject({ type: 'bankTrade', give: 'wood' })
-    const capped = companionIntent(state, 0, createRng(0), { ...COMPANION_DEFAULTS, bankTradesThisTurn: 2 })!
+    const capped = companionIntent(state, 0, createRng(0), { ...COMPANION_DEFAULTS, proposedThisTurn: true, bankTradesThisTurn: 2 })!
     expect(capped.type).toBe('endTurn')
   })
 
@@ -180,17 +189,91 @@ describe('companionIntent decisions', () => {
   })
 })
 
+describe('companion trade proposals', () => {
+  it('proposes 1 surplus for the biggest goal deficit when 1-2 kinds short', () => {
+    // goal city (2 wheat 3 ore): exact hand 3 wheat (surplus 1) + 2 ore → missing 1 ore only
+    let state = exactHand(inMain(), 0, { wheat: 3, ore: 2 })
+    state = { ...state, turn: { ...state.turn, current: 0 } } // test surgery: make it seat 0's main
+    const plan = proposalPlan(state, 0)
+    expect(plan).toEqual({ give: 'wheat', get: 'ore' })
+    const intent = companionIntent(state, 0, createRng(0))!
+    expect(intent).toMatchObject({ type: 'offerTrade', give: { wheat: 1 }, get: { ore: 1 } })
+  })
+
+  it('never proposes twice a turn, with no surplus, or when 3+ kinds short', () => {
+    let ready = exactHand(inMain(), 0, { wheat: 3, ore: 2 })
+    ready = { ...ready, turn: { ...ready.turn, current: 0 } }
+    const again = companionIntent(ready, 0, createRng(0), { ...COMPANION_DEFAULTS, proposedThisTurn: true })!
+    expect(again.type).not.toBe('offerTrade')
+    const fresh = { ...inMain(), turn: { ...inMain().turn, current: 0 } }
+    expect(proposalPlan(fresh, 0)).toBeNull() // fresh hand: no surplus
+  })
+
+  it('confirms an acceptable responder; counters must pass the floor', () => {
+    let s = exactHand(inMain(), 0, { wheat: 3, ore: 2 })
+    s = { ...s, turn: { ...s.turn, current: 0 } }
+    s = mustApply(s, { type: 'offerTrade', player: 0, give: { wheat: 1 }, get: { ore: 1 } })
+    s = withResources(s, 1, { ore: 1 })
+    s = withResources(s, 2, { ore: 1 })
+    s = mustApply(s, { type: 'respondTrade', player: 1, response: 'accept' })
+    s = mustApply(s, { type: 'respondTrade', player: 2, response: 'accept' })
+    // both accepted; equal public VP → stable order keeps the first responder (seat 1)
+    expect(bestConfirmPartner(s, 0)).toBe(1)
+    const intent = companionIntent(s, 0, createRng(0))!
+    expect(intent).toMatchObject({ type: 'confirmTrade', partner: 1 })
+  })
+
+  it('waits while responses are pending, cancels on resolveOfferNow', () => {
+    let s = exactHand(inMain(), 0, { wheat: 3, ore: 2 })
+    s = { ...s, turn: { ...s.turn, current: 0 } }
+    s = mustApply(s, { type: 'offerTrade', player: 0, give: { wheat: 1 }, get: { ore: 1 } })
+    expect(companionIntent(s, 0, createRng(0))).toBeNull()
+    const forced = companionIntent(s, 0, createRng(0), { ...COMPANION_DEFAULTS, resolveOfferNow: true })!
+    expect(forced.type).toBe('cancelTrade')
+    // a lone unfavorable counter: seat 1 wants 3 wheat for 1 ore — proposer would net-lose
+    s = withResources(s, 1, { ore: 1 })
+    s = mustApply(s, { type: 'respondTrade', player: 1, response: { give: { ore: 1 }, get: { wheat: 3 } } })
+    // counter fails the floor (pay 3 wheat for 1 ore)
+    expect(bestConfirmPartner(s, 0)).toBeNull()
+  })
+})
+
 describe('companion liveness', () => {
   it('4 companion seats finish seeded games; every intent legal; no nulls while the game waits', () => {
     for (const seed of [1, 2, 3]) {
       const rng = createRng(seed)
       let state = createCatanGame({ playerCount: 4 }, rng)
+      let turnNumber = state.turn.number
+      let proposedThisTurn = [false, false, false, false]
+      let bankTradesThisTurn = [0, 0, 0, 0]
       for (let i = 0; i < 5000 && state.winner === null; i++) {
-        const seat = state.turn.phase === 'discard'
-          ? Number(Object.keys(state.turn.pendingDiscards)[0]!)
-          : state.turn.current
-        const intent = companionIntent(state, seat, rng)
+        if (state.turn.number !== turnNumber) {
+          turnNumber = state.turn.number
+          proposedThisTurn = [false, false, false, false]
+          bankTradesThisTurn = [0, 0, 0, 0]
+        }
+        let seat: number
+        let opts = COMPANION_DEFAULTS
+        if (state.turn.phase === 'discard') {
+          seat = Number(Object.keys(state.turn.pendingDiscards)[0]!)
+        } else if (state.turn.openTrade) {
+          const offer = state.turn.openTrade
+          const pending = [0, 1, 2, 3].filter((s) => s !== state.turn.current && offer.responses[s] === undefined)
+          if (pending.length > 0) {
+            seat = pending[0]!
+          } else {
+            // every non-current seat has responded: mirror the room's deadline so the loop can't stall
+            seat = state.turn.current
+            opts = { proposedThisTurn: proposedThisTurn[seat]!, bankTradesThisTurn: bankTradesThisTurn[seat]!, resolveOfferNow: true }
+          }
+        } else {
+          seat = state.turn.current
+          opts = { proposedThisTurn: proposedThisTurn[seat]!, bankTradesThisTurn: bankTradesThisTurn[seat]!, resolveOfferNow: false }
+        }
+        const intent = companionIntent(state, seat, rng, opts)
         expect(intent, `seed ${seed}: stalled at ${i}, phase ${state.turn.phase}`).not.toBeNull()
+        if (intent!.type === 'offerTrade') proposedThisTurn[seat] = true
+        if (intent!.type === 'bankTrade') bankTradesThisTurn[seat] = bankTradesThisTurn[seat]! + 1
         const result = applyCatanIntent(state, intent!, rng)
         if (isCatanRuleError(result)) throw new Error(`seed ${seed} seat ${seat}: ${result.code}: ${result.message}`)
         state = result

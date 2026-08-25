@@ -110,6 +110,49 @@ export const COMPANION_DEFAULTS: CompanionOpts = {
   bankTradesThisTurn: 0,
 }
 
+/**
+ * Player-trade ask (design spec §1): fires only when the goal is 1–2 resource
+ * kinds short AND some other resource has surplus beyond the goal's own cost.
+ * Give exactly 1 surplus for 1 of the biggest deficit — tried before the
+ * >=4:1 bank fallback.
+ */
+export function proposalPlan(state: CatanState, seat: PlayerId): { give: Resource; get: Resource } | null {
+  const goal = buildGoal(state, seat)
+  const cost = COSTS[goal]
+  const hand = state.players[seat]!.resources
+  const missing = missingForGoal(state, seat, goal)
+  if (missing.length === 0 || missing.length > 2) return null
+  let give: Resource | null = null
+  let giveSurplus = 0
+  for (const r of RESOURCES) {
+    if (missing.includes(r)) continue
+    const surplus = hand[r] - (cost[r] ?? 0)
+    if (surplus >= 1 && surplus > giveSurplus) { give = r; giveSurplus = surplus }
+  }
+  return give ? { give, get: missing[0]! } : null
+}
+
+/**
+ * Best confirmable responder to our own open offer, or null. Accepts are
+ * always confirmable; counters must pass the pilot floor from the proposer's
+ * side (cover counter.get, and counter.give >= counter.get in card count).
+ * Ties/choices resolve toward the fewest public VP — don't feed the leader.
+ */
+export function bestConfirmPartner(state: CatanState, seat: PlayerId): PlayerId | null {
+  const offer = state.turn.openTrade
+  if (!offer) return null
+  const hand = state.players[seat]!.resources
+  const ok: PlayerId[] = []
+  for (const [k, r] of Object.entries(offer.responses)) {
+    const partner = Number(k)
+    if (r.kind === 'accept') ok.push(partner)
+    else if (r.kind === 'counter' && hasResources(hand, r.get) && totalResources(r.give) >= totalResources(r.get))
+      ok.push(partner)
+  }
+  ok.sort((a, b) => publicVp(state, a) - publicVp(state, b))
+  return ok[0] ?? null
+}
+
 /** Give 4-of-a-kind surplus (beyond the goal's own cost) for the goal's biggest deficit. */
 export function bankTradePlan(state: CatanState, seat: PlayerId): { give: Resource; get: Resource } | null {
   const goal = buildGoal(state, seat)
@@ -202,10 +245,12 @@ function mainPhase(state: CatanState, seat: PlayerId, opts: CompanionOpts): Cata
   const t = state.turn
   const me = state.players[seat]!
 
-  // own open offer: Task 3 adds confirm-best; until then cancel on deadline, else wait
+  // own open offer: confirm the best partner, else wait for the room's deadline, else cancel
   if (t.openTrade) {
+    const partner = bestConfirmPartner(state, seat)
+    if (partner !== null) return { type: 'confirmTrade', player: seat, partner }
     if (opts.resolveOfferNow) return { type: 'cancelTrade', player: seat }
-    return null
+    return null // keep waiting; the room owns the clock
   }
 
   const can = affordable(state, seat)
@@ -241,6 +286,11 @@ function mainPhase(state: CatanState, seat: PlayerId, opts: CompanionOpts): Cata
   if (can.road && me.roadsLeft > 0) {
     const spots = legalRoadEdges(state, seat)
     if (spots.length) return { type: 'build', player: seat, piece: 'road', location: spots[0]! }
+  }
+
+  if (!opts.proposedThisTurn) {
+    const ask = proposalPlan(state, seat)
+    if (ask) return { type: 'offerTrade', player: seat, give: { [ask.give]: 1 }, get: { [ask.get]: 1 } }
   }
 
   if (opts.bankTradesThisTurn < 2) {
