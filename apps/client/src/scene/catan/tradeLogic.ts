@@ -87,6 +87,29 @@ export type ResponseSummary = { seat: number } & (
   | { kind: 'counter'; youGive: Partial<ResourceCount>; youGet: Partial<ResourceCount> }
 )
 
+/**
+ * Pure: should the mute-toggle auto-decline effect fire right now? Muted,
+ * offer unanswered, and not already pending a decline we sent — that last
+ * guard is what stops a spam of rejects while our own `respondTrade` is
+ * still in flight to the server (before a snapshot round-trip records it in
+ * `responses`); see `autoDeclineIfMuted` in catanStore.ts.
+ */
+export function shouldAutoDecline(
+  view: CatanClientState,
+  seat: number,
+  muted: boolean,
+  declinePending: boolean,
+): boolean {
+  if (!muted || declinePending) return false
+  const offer = incomingOfferFor(view, seat)
+  return offer !== null && !offer.responded
+}
+
+/** Pure: should IncomingOffer's banner render? Never while muted — those offers auto-decline silently. */
+export function shouldShowOfferBanner(view: CatanClientState, seat: number, muted: boolean): boolean {
+  return !muted && incomingOfferFor(view, seat) !== null
+}
+
 /** Per-opponent response status as the offerer sees it, or null if this seat isn't the offerer. */
 export function offerResponsesFor(view: CatanClientState, seat: number): ResponseSummary[] | null {
   const offer = view.turn.openTrade

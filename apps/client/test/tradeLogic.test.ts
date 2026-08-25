@@ -3,7 +3,7 @@ import { createCatanGame, createRng, redactCatanState, type CatanClientState } f
 import {
   bankRates, bankTradeIntent, counterTradeIntent, decrementSelection, emptySelection,
   incomingOfferFor, incrementSelection, offerResponsesFor, offerTradeIntent,
-  selectionToPartial, selectionTotal,
+  selectionToPartial, selectionTotal, shouldAutoDecline, shouldShowOfferBanner,
 } from '../src/scene/catan/tradeLogic'
 
 /** Real-engine view; you.resources / turn / bank overridable per test. */
@@ -120,5 +120,59 @@ describe('offer derivations', () => {
   it('offerResponsesFor is null for non-offerers', () => {
     const view = makeView({ seat: 1, turn: { current: 0, phase: 'main', openTrade } })
     expect(offerResponsesFor(view, 1)).toBeNull()
+  })
+})
+
+describe('mute: auto-decline decision', () => {
+  const openTrade = { give: { wood: 2 }, get: { ore: 1 }, responses: {} }
+
+  it('fires for an unanswered incoming offer while muted', () => {
+    const view = makeView({ seat: 1, turn: { current: 0, phase: 'main', openTrade } })
+    expect(shouldAutoDecline(view, 1, true, false)).toBe(true)
+  })
+
+  it('does not fire when unmuted', () => {
+    const view = makeView({ seat: 1, turn: { current: 0, phase: 'main', openTrade } })
+    expect(shouldAutoDecline(view, 1, false, false)).toBe(false)
+  })
+
+  it('does not fire for the offerer’s own open offer', () => {
+    const view = makeView({ turn: { current: 0, phase: 'main', openTrade } })
+    expect(shouldAutoDecline(view, 0, true, false)).toBe(false)
+  })
+
+  it('does not fire once this seat has already answered', () => {
+    const answered = { ...openTrade, responses: { 1: { kind: 'reject' as const } } }
+    const view = makeView({ seat: 1, turn: { current: 0, phase: 'main', openTrade: answered } })
+    expect(shouldAutoDecline(view, 1, true, false)).toBe(false)
+  })
+
+  it('does not double-fire while a decline is already pending', () => {
+    const view = makeView({ seat: 1, turn: { current: 0, phase: 'main', openTrade } })
+    expect(shouldAutoDecline(view, 1, true, true)).toBe(false)
+  })
+
+  it('does not fire when there is no open trade', () => {
+    const view = makeView({ turn: { phase: 'main', openTrade: null } })
+    expect(shouldAutoDecline(view, 1, true, false)).toBe(false)
+  })
+})
+
+describe('mute: offer banner visibility', () => {
+  const openTrade = { give: { wood: 2 }, get: { ore: 1 }, responses: {} }
+
+  it('is suppressed while muted, even with an open incoming offer', () => {
+    const view = makeView({ seat: 1, turn: { current: 0, phase: 'main', openTrade } })
+    expect(shouldShowOfferBanner(view, 1, true)).toBe(false)
+  })
+
+  it('shows while unmuted with an open incoming offer', () => {
+    const view = makeView({ seat: 1, turn: { current: 0, phase: 'main', openTrade } })
+    expect(shouldShowOfferBanner(view, 1, false)).toBe(true)
+  })
+
+  it('is hidden when there is no incoming offer, regardless of mute', () => {
+    const view = makeView({ turn: { phase: 'main', openTrade: null } })
+    expect(shouldShowOfferBanner(view, 1, false)).toBe(false)
   })
 })

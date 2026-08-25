@@ -101,6 +101,18 @@
 }
 .build-bar-btn.active { background: #2c6e8f; border-color: #7fc8e8; color: #fff; }
 .build-bar-btn:disabled { opacity: 0.4; cursor: default; }
+.mute-pill {
+  align-self: center;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  border: 1px solid rgba(127, 200, 232, 0.35);
+  border-radius: 999px;
+  background: #20222b;
+  color: #e8e8f0;
+  cursor: pointer;
+}
+.mute-pill.active { background: #6e2c2c; border-color: #e87f7f; color: #fff; }
 .modal-backdrop {
   position: fixed;
   inset: 0;
