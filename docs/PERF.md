@@ -130,3 +130,151 @@ a draw-call issue); water material `useMemo` identity (`CatanScene.tsx`'s
 reference changes, even when the actual hex set didn't — fine for a
 static board, worth revisiting once the store can produce new view objects
 mid-match).
+
+## Browser performance pass — task 13 (2026-08-25)
+
+Measure-first pass over the live client, per the task-13 brief's hypothesis
+list (per-snapshot re-render cost, `view.board` identity churn, Zustand
+selector granularity, N8AO/shadow cost, draw-call growth from phases 5-6 +
+port rafts/boats). Own vite (5199) + colyseus (2599) stack, never the dev
+ports; Playwright Chromium with `--use-angle=metal --enable-gpu` (same GPU
+trap as the Phase-4 gate above).
+
+### Baseline
+
+| Scene | Tier | FPS (5s rAF) | Draw calls | Triangles | Heap (JS, MB) |
+|---|---|---|---|---|---|
+| `/board` preview | high | 61–86 (noisy, see below) | 537 | 314,523 | ~40–45 |
+| `/board` preview | low | 114–120 | 531 | 314,517 | ~36–45 |
+| Live solo vs 3 bots | high | 82–88 | 609 | 316,543 | ~55–69 |
+| Live solo vs 3 bots | low | 111–119 | 603 | 316,537 | ~55–69 |
+
+Method: `window.__meridianDebug.catanRenderInfo()` + a 5s `requestAnimationFrame`
+counter, 1280×720, `performance.memory.usedJSHeapSize`. The high-tier FPS
+range is genuinely noisy run-to-run on this machine (unlike the Phase-4
+gate's clean 120fps vsync cap) — draw calls/geometry have grown enough
+since that gate (287 → 432 → 537/609 here) that tier=high is no longer
+purely vsync-capped, it's now mildly GPU/fill-rate-bound via N8AO. Draw
+calls grew 432 → 537 (`/board`) since the Phase-4 gate: SVG resource icons,
+port signs, and now two boats + a raft per port account for the rest (this
+task's context: 501 → 537 from the two-boats-per-port change alone).
+
+### Hotspot ranking (measured, not assumed)
+
+1. **`view.board` identity churn → redundant per-snapshot scene rebuilds
+   (confirmed, fixed).** The task-13 context flagged this as unverified —
+   confirmed directly. `catanStore.ingestSnapshot` assigns `payload.view`
+   (a fresh object from the wire) wholesale on every server push, so
+   `view.board` gets a new identity every snapshot even though only
+   `board.robber` ever actually changes mid-match. A temporary console-log
+   probe on a 20s live solo-vs-3-bots match (bots on a 900ms delay, host
+   driven through real turns so bots keep producing snapshots) counted:
+   - `ingestSnapshot`: 27–28 calls (one per real snapshot).
+   - `PortSign.tsx`'s `buildContentGeometry` (the merged ink-backing +
+     SVG-icon + `TextGeometry` port-sign mesh, rebuilt via
+     `mergeGeometries`): **28/28 snapshots** re-ran it. Direct timing:
+     avg **1.57ms**, total 44.1ms of wasted main-thread work over 20s.
+   - `CatanBoard.tsx`'s `InstancedVariant` (rewrites an entire scatter
+     InstancedMesh's matrices + `computeBoundingSphere` + a GPU buffer
+     re-upload): **168/168** calls (28 snapshots × 6 scatter variants)
+     re-ran. Direct timing: avg 0.02ms/call, ~2.6ms total over 20s — cheap
+     per call, but 6 unnecessary GPU buffer re-uploads every snapshot.
+   - `PortSign.tsx`'s `RaftInstances` (rewrites the port-raft InstancedMesh
+     matrices): 28/28 re-ran (not separately timed; same shape as
+     `InstancedVariant`).
+
+   None of this work was ever needed except on an actual robber move —
+   board layout (hexes, ports) is fixed for the whole match.
+
+2. **Boat draw-call count (measured, no win found, not landed).** Task
+   context flagged two-boats-per-port (+36 draw calls, 501→537) as a
+   candidate for `InstancedMesh` conversion. Tested empirically first:
+   disabled boat rendering entirely and re-measured. Draw calls dropped
+   537→465 (`/board`) / 609→537 (live), a real 12% cut — but FPS moved
+   from 83.6→86.4 (`/board`) and *down* slightly live (87.9→81.8), both
+   within this machine's run-to-run noise band (±5fps across identical
+   configs). This scene is not currently draw-call-bound at 1280×720 on
+   this hardware — instancing the boats would be legitimate defensive
+   engineering (mobile/low-end GPUs are far more draw-call-sensitive per
+   the graphics-optimizer skill's mobile-first guidance) but isn't a
+   *measured* win here, so it's not landed this round. See Future below.
+
+3. **N8AO tier cost (already known, no action).** high-vs-low tier gap is
+   unchanged in character from the beauty-slice finding — draw calls
+   barely move (−6, the N8AO pass itself) but fps drops meaningfully
+   (~85→~118): a fill-rate cost, not a draw-call one, and already the
+   entire point of the `?tier=low` fallback. Not touched (would require a
+   visual-quality change to move further, which is out of scope).
+
+4. **Shadow map / Zustand selector granularity: investigated, not pursued.**
+   The 2048×2048 soft-shadow directional light is a plausible cost but any
+   reduction is a visible quality change (out of scope: no visual
+   regressions). HUD components (`CatanHud`, `BuildBar`, `TradePanel`, etc.)
+   subscribe to the whole `view` via Zustand and so re-render on every
+   snapshot regardless of relevance — real, but these are cheap DOM
+   components (several return `null` immediately when inactive) and
+   almost all of them legitimately need to reflect most snapshots (turn,
+   dice, hand); no measurable win identified here, so not pursued further
+   this round (see Future below).
+
+### Fix landed: pin the board's static layout, only re-identity on robber moves
+
+`apps/client/src/scene/catan/CatanScene.tsx`'s new `useStableBoard` pins
+the first `view.board` it sees in a `useRef` and only produces a new
+`board` object (spreading the pinned layout with a fresh `robber` field)
+when `view.board.robber` actually changes. `CatanBoard`, `Pieces`,
+`PickLayer`, and `Highlights` now all receive this stable `board` (via a
+`stableView` that keeps `buildings`/`roads` live) instead of the
+raw per-snapshot `view.board`.
+
+**Re-measured with the same probe** (20s live solo-vs-3-bots match, 27
+real snapshots landed): `buildContentGeometry` ran **1** time (mount only,
+not 27); `InstancedVariant` ran **6** times total (once per variant at
+mount, not 162); `RaftInstances` ran **1** time (not 27). This eliminates
+essentially all of the wasted per-snapshot work identified in hotspot #1 —
+confirmed by direct call-count elimination, the most reliable signal here.
+
+Aggregate FPS/frame-time percentiles (`requestAnimationFrame` delta
+p50/p95/p99/max over a 20s driven match) did **not** show a detectable
+before/after difference at this board's current scale (p50 ~12ms, p95
+~19–20ms, both before and after) — the ~1.6ms eliminated per snapshot is
+smaller than this harness's run-to-run noise floor, and snapshots land
+only every few seconds during normal play, not every frame. Reporting
+this honestly rather than overclaiming an FPS win: the fix is justified by
+eliminating measured, real, unconditional wasted work (main-thread CPU +
+unnecessary GPU buffer re-uploads) on every network message, not by a
+headline FPS delta. It also fully resolves the "water material `useMemo`
+identity" item this file's own Task-8/9 entry had deferred pending "the
+store [producing] new view objects mid-match" — that's exactly what
+happens now, and the generalized pin (not just `Water`'s local one) covers
+it for every consumer, not just water.
+
+No visual regression: `/board?tier=high` screenshots before/after are
+pixel-identical modulo water-shader animation phase (the two captures were
+taken at slightly different `uTime` values, not a rendering difference —
+confirmed by eye, board geometry/lighting/pieces unchanged).
+
+Verification: `pnpm -C apps/client test` (190/190), `npx tsc --noEmit`
+(clean), `pnpm -C packages/rules test` (158/158), `pnpm -C apps/server
+test` (63/63) — all green, run once at the end of this pass.
+
+### Future (not landed this round — deeper or riskier, ledgered instead of chased)
+
+- **Boat `InstancedMesh` conversion** (hotspot #2 above): no measured win
+  on this hardware at this scale, but draw-call reduction is real (12%)
+  and would matter more on lower-end/mobile GPUs. Complication: sails need
+  per-instance tint (only resource ports color theirs) — three.js
+  `InstancedMesh.setColorAt`/`instanceColor` supports this on
+  `MeshStandardMaterial` without a custom shader, but needs its own
+  visual-regression pass (per-instance color vs. today's cloned-material
+  tint must render identically) before landing.
+- **HUD Zustand selector granularity**: components subscribing to the
+  whole `view` re-render on every snapshot even when irrelevant to them
+  (e.g. `IncomingOffer`, `StealChooser` on turns with no open
+  trade/steal). Likely low-value (cheap DOM, mostly early-return) but
+  unmeasured — worth a pass only if HUD-side jank is ever reported.
+- **Tint-material dispose on upgrade** (carried over from the Task-8/9
+  entry above): still not fixed, still minor.
+- **Shadow map size/radius, N8AO parameters**: any further tightening
+  changes the approved art direction and needs a design sign-off, not a
+  perf-only change.

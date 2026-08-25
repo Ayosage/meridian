@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { CatanClientIntent, CatanSnapshotPayload } from '@meridian/protocol'
+import type { CatanClientIntent, CatanEvent, CatanSnapshotPayload } from '@meridian/protocol'
 import {
   coordKey,
   legalCityVertices,
@@ -30,8 +30,29 @@ import {
   incrementSelection,
   offerTradeIntent,
   selectionTotal,
+  shouldAutoDecline,
   type ResourceSelection,
 } from './tradeLogic'
+
+const TRADE_MUTE_KEY = 'meridian.tradeMute'
+
+/** Defensive read: private browsing / disabled storage must never throw past this — default OFF. */
+function loadTradeMute(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(TRADE_MUTE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+/** Defensive write: storage failures (quota, disabled, private mode) must not block the in-memory toggle. */
+function saveTradeMute(muted: boolean): void {
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(TRADE_MUTE_KEY, muted ? '1' : '0')
+  } catch {
+    // in-memory state still applies; persistence is best-effort
+  }
+}
 
 export type CatanStatus =
   | 'idle'
@@ -223,6 +244,8 @@ interface CatanState {
   roomId: string | null
   seat: number | null
   view: CatanClientState | null
+  /** Action log: server-derived events, newest first, capped (ActionLog ticker). */
+  eventLog: readonly CatanEvent[]
   toast: string | null
   winner: CatanMatchResult | null
   mode: Mode
@@ -232,6 +255,8 @@ interface CatanState {
   seats: string[]
   connected: boolean[]
   targetPlayers: number | null
+  /** Reserved bot seats (server appends bot players at match start; empty during 'waiting'). */
+  botCount: number
 
   /** TradePanel: open/closed, and which tab (player offer vs. bank) is active. */
   tradeOpen: boolean
@@ -245,6 +270,14 @@ interface CatanState {
   /** Staged counter-offer draft while responding to an incoming trade; null outside that flow. */
   counterDraft: { give: ResourceSelection; get: ResourceSelection } | null
 
+  /** Incoming-trade mute (HUD toggle, `trade-mute-toggle`): a device-level preference, persisted
+   * in localStorage and deliberately NOT reset by `reset()` (see below) — it must survive
+   * leaving and starting a new match. Default OFF. */
+  tradeMute: boolean
+  /** True from the moment a muted auto-decline is sent until the offer it answered closes;
+   * guards against re-sending while the response is still in flight (see `shouldAutoDecline`). */
+  autoDeclinePending: boolean
+
   /** DevModal: which dev-card modal (if any) is open. */
   devModal: 'yearOfPlenty' | 'monopoly' | null
   /** Staged yearOfPlenty picks; reset on opening the modal. */
@@ -253,7 +286,7 @@ interface CatanState {
   setStatus(status: CatanStatus): void
   setJoined(roomId: string): void
   setSeat(seat: number): void
-  setLobby(seats: string[], connected: boolean[], targetPlayers: number): void
+  setLobby(seats: string[], connected: boolean[], targetPlayers: number, botCount: number): void
   ingestSnapshot(payload: CatanSnapshotPayload): void
   setMode(mode: Mode): void
   setToast(message: string | null): void
@@ -320,6 +353,10 @@ interface CatanState {
   confirmTradeWith(partner: number, send: SendIntent): void
   /** Offerer: cancel the open offer outright. */
   cancelOpenTrade(send: SendIntent): void
+  /** HUD toggle: flip trade-mute and persist the choice. */
+  toggleTradeMute(): void
+  /** IncomingOffer effect: auto-decline this seat's open offer while muted (see `shouldAutoDecline`). No-op otherwise. */
+  autoDeclineIfMuted(send: SendIntent): void
 
   /** DevModal: open the yearOfPlenty/monopoly modal, resetting the plenty staging. */
   openDevModal(kind: 'yearOfPlenty' | 'monopoly'): void
@@ -339,6 +376,7 @@ const INITIAL = {
   roomId: null as string | null,
   seat: null as number | null,
   view: null as CatanClientState | null,
+  eventLog: [] as readonly CatanEvent[],
   toast: null as string | null,
   winner: null as CatanMatchResult | null,
   mode: IDLE_MODE,
@@ -346,6 +384,7 @@ const INITIAL = {
   seats: [] as string[],
   connected: [] as boolean[],
   targetPlayers: null as number | null,
+  botCount: 0,
   tradeOpen: false,
   tradeTab: 'players' as const,
   tradeGive: emptySelection(),
@@ -355,15 +394,19 @@ const INITIAL = {
   counterDraft: null as { give: ResourceSelection; get: ResourceSelection } | null,
   devModal: null as 'yearOfPlenty' | 'monopoly' | null,
   plentySelection: emptySelection(),
+  autoDeclinePending: false,
 }
 
 export const useCatanStore = create<CatanState>((set, get) => ({
   ...INITIAL,
+  // Not part of INITIAL: reset() must not wipe a device-level preference the
+  // player already set — see the field's doc comment on CatanState.
+  tradeMute: loadTradeMute(),
 
   setStatus: (status) => set({ status }),
   setJoined: (roomId) => set({ roomId, status: 'waiting' }),
   setSeat: (seat) => set({ seat }),
-  setLobby: (seats, connected, targetPlayers) => set({ seats, connected, targetPlayers }),
+  setLobby: (seats, connected, targetPlayers, botCount) => set({ seats, connected, targetPlayers, botCount }),
 
   ingestSnapshot: (payload) => {
     const { view, seat, mode, discardSelection } = get()
@@ -380,14 +423,21 @@ export const useCatanStore = create<CatanState>((set, get) => ({
     // staged selections are done with; a resolved/cancelled trade clears drafts.
     const ownOfferPosted = !hadOpenTrade && hasOpenTrade && payload.view.turn.current === seat
     const resetStaging = tradeResolved || ownOfferPosted
+    const eventLog = payload.events?.length
+      ? [...payload.events].reverse().concat(get().eventLog).slice(0, 100)
+      : get().eventLog
     set({
       view: payload.view,
+      eventLog,
       mode: nextMode,
       status: payload.view.winner !== null ? 'ended' : 'playing',
       discardSelection: enteringDiscard ? EMPTY_DISCARD : discardSelection,
       counterDraft: tradeResolved ? null : get().counterDraft,
       tradeGive: resetStaging ? emptySelection() : get().tradeGive,
       tradeGet: resetStaging ? emptySelection() : get().tradeGet,
+      // Cleared whenever no offer is open, so the NEXT offer can be
+      // auto-declined too — see shouldAutoDecline's `declinePending` guard.
+      autoDeclinePending: hasOpenTrade ? get().autoDeclinePending : false,
     })
   },
 
@@ -561,6 +611,19 @@ export const useCatanStore = create<CatanState>((set, get) => ({
   cancelCounter: () => set({ counterDraft: null }),
   confirmTradeWith: (partner, send) => send({ type: 'confirmTrade', partner }),
   cancelOpenTrade: (send) => send({ type: 'cancelTrade' }),
+
+  toggleTradeMute: () => {
+    const next = !get().tradeMute
+    saveTradeMute(next)
+    set({ tradeMute: next })
+  },
+  autoDeclineIfMuted: (send) => {
+    const { view, seat, tradeMute, autoDeclinePending } = get()
+    if (view === null || seat === null) return
+    if (!shouldAutoDecline(view, seat, tradeMute, autoDeclinePending)) return
+    send({ type: 'respondTrade', response: 'reject' })
+    set({ autoDeclinePending: true })
+  },
 
   startRoadBuilding: () => {
     const { view, seat, mode } = get()

@@ -7,7 +7,9 @@ export function Lobby() {
   const status = useCatanStore((s) => s.status)
   const [code, setCode] = useState('')
   const [players, setPlayers] = useState<3 | 4>(4)
+  const [bots, setBots] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const maxBots = players - 1
   const busy = status === 'connecting'
 
   async function withCatch(fn: () => Promise<void>): Promise<void> {
@@ -32,7 +34,10 @@ export function Lobby() {
           data-testid="players-3"
           className={players === 3 ? 'selected' : undefined}
           disabled={busy}
-          onClick={() => setPlayers(3)}
+          onClick={() => {
+            setPlayers(3)
+            setBots((b) => Math.min(b, 2))
+          }}
         >
           3 players
         </button>
@@ -45,10 +50,23 @@ export function Lobby() {
           4 players
         </button>
       </div>
+      <div className="players-choice bots-choice">
+        {Array.from({ length: maxBots + 1 }, (_, n) => (
+          <button
+            key={n}
+            data-testid={`bots-${n}`}
+            className={bots === n ? 'selected' : undefined}
+            disabled={busy}
+            onClick={() => setBots(n)}
+          >
+            {n === 0 ? 'No bots' : `${n} bot${n > 1 ? 's' : ''}`}
+          </button>
+        ))}
+      </div>
       <button
         data-testid="create-button"
         disabled={busy}
-        onClick={() => void withCatch(() => createCatanMatch(players))}
+        onClick={() => void withCatch(() => createCatanMatch(players, bots))}
       >
         Create match
       </button>

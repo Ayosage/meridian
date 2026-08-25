@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createCatanGame, createRng, redactCatanState, type CatanClientState } from '@meridian/rules'
 import { useCatanStore } from '../src/scene/catan/catanStore'
 
@@ -26,7 +26,26 @@ function seed(turn: Partial<CatanClientState['turn']> = MAIN, resources = { wood
   useCatanStore.getState().ingestSnapshot({ seq: 1, view: makeView({ seq: 1, turn, resources }) })
 }
 
-beforeEach(() => useCatanStore.getState().reset())
+/** In-memory Storage polyfill, matching tokenStorage.test.ts's FakeSessionStorage idiom. */
+class FakeLocalStorage {
+  private data = new Map<string, string>()
+  getItem(key: string): string | null {
+    return this.data.get(key) ?? null
+  }
+  setItem(key: string, value: string): void {
+    this.data.set(key, value)
+  }
+  removeItem(key: string): void {
+    this.data.delete(key)
+  }
+}
+
+beforeEach(() => {
+  useCatanStore.getState().reset()
+  // tradeMute is a device-level preference (deliberately NOT cleared by
+  // reset() — see catanStore.ts), so tests must force it back explicitly.
+  useCatanStore.setState({ tradeMute: false })
+})
 
 describe('composer staging', () => {
   it('toggleTrade opens with clean staging and closes again', () => {
@@ -155,5 +174,80 @@ describe('offerer controls + snapshot resets', () => {
       }),
     })
     expect(useCatanStore.getState().counterDraft).toEqual(draftBefore)
+  })
+})
+
+describe('trade mute toggle', () => {
+  const original = (globalThis as { localStorage?: Storage }).localStorage
+
+  afterEach(() => {
+    ;(globalThis as { localStorage?: Storage }).localStorage = original
+  })
+
+  it('defaults OFF (defensive read: this test env has no localStorage at module init)', () => {
+    expect(useCatanStore.getState().tradeMute).toBe(false)
+  })
+
+  it('toggleTradeMute flips state and persists the choice', () => {
+    const fake = new FakeLocalStorage()
+    ;(globalThis as { localStorage?: Storage }).localStorage = fake as unknown as Storage
+    useCatanStore.getState().toggleTradeMute()
+    expect(useCatanStore.getState().tradeMute).toBe(true)
+    expect(fake.getItem('meridian.tradeMute')).toBe('1')
+    useCatanStore.getState().toggleTradeMute()
+    expect(useCatanStore.getState().tradeMute).toBe(false)
+    expect(fake.getItem('meridian.tradeMute')).toBe('0')
+  })
+
+  it('still flips state when storage throws (private mode / disabled storage)', () => {
+    ;(globalThis as { localStorage?: Storage }).localStorage = {
+      getItem() {
+        throw new Error('blocked')
+      },
+      setItem() {
+        throw new Error('blocked')
+      },
+      removeItem() {},
+    } as unknown as Storage
+    expect(() => useCatanStore.getState().toggleTradeMute()).not.toThrow()
+    expect(useCatanStore.getState().tradeMute).toBe(true)
+  })
+})
+
+describe('auto-decline while muted', () => {
+  it('sends a reject for an unanswered incoming offer while muted, exactly once', () => {
+    seed({ ...MAIN, current: 1, openTrade: OPEN }) // seat 0 is the responder
+    useCatanStore.getState().toggleTradeMute()
+    const send = vi.fn()
+    useCatanStore.getState().autoDeclineIfMuted(send)
+    expect(send).toHaveBeenCalledWith({ type: 'respondTrade', response: 'reject' })
+    useCatanStore.getState().autoDeclineIfMuted(send) // same snapshot: still pending, must not resend
+    expect(send).toHaveBeenCalledTimes(1)
+  })
+
+  it('does nothing while unmuted', () => {
+    seed({ ...MAIN, current: 1, openTrade: OPEN })
+    const send = vi.fn()
+    useCatanStore.getState().autoDeclineIfMuted(send)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('the pending guard clears once the offer closes, so the next offer auto-declines too', () => {
+    seed({ ...MAIN, current: 1, openTrade: OPEN })
+    useCatanStore.getState().toggleTradeMute()
+    const send = vi.fn()
+    useCatanStore.getState().autoDeclineIfMuted(send)
+    expect(send).toHaveBeenCalledTimes(1)
+
+    useCatanStore.getState().ingestSnapshot({
+      seq: 2,
+      view: makeView({ seq: 2, turn: { ...MAIN, current: 1, openTrade: null } }),
+    })
+    useCatanStore.getState().ingestSnapshot({
+      seq: 3,
+      view: makeView({ seq: 3, turn: { ...MAIN, current: 1, openTrade: OPEN } }),
+    })
+    useCatanStore.getState().autoDeclineIfMuted(send)
+    expect(send).toHaveBeenCalledTimes(2)
   })
 })

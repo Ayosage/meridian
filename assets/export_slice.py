@@ -29,6 +29,7 @@ EXPORTS = {
     # removed — per-token grid offsets stay in node transforms, and the CLIENT
     # clones each token_<n> MESH by name, ignoring the node transform.
     "piece_tokens": ("tokens", 20.0, ()),
+    "piece_raft": ("raft", 22.0, ()),
 }
 
 for coll_name, (glb, xoff, excludes) in EXPORTS.items():

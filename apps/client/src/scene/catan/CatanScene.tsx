@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { coordKey, type CatanBoard as CatanBoardData, type CatanClientState } from '@meridian/rules'
 import { coordToWorld } from '../layout'
 import { CatanBoard } from './CatanBoard'
-import { edgeWorld, TILE_TOP, vertexWorld } from './catanLayout'
+import { edgeWorld, TILE_TOP, vertexWorld, WATER_Y } from './catanLayout'
 import { legalEdgesForMode, legalVerticesForMode, useCatanStore } from './catanStore'
 import { Highlights } from './Highlights'
 import { PickLayer } from './PickLayer'
@@ -20,7 +20,6 @@ import { GoldenHourRig, SkyBackdrop } from './rig'
  * Rig/water/post are promoted from the approved beauty slice (Task 8).
  */
 
-const WATER_Y = 0.05
 const WATER_SIZE = 28
 
 /**
@@ -29,9 +28,9 @@ const WATER_SIZE = 28
  * (see catanStore.ingestSnapshot), and while the board layout itself never
  * changes mid-match (only `board.robber` does — see robber.ts), relying on
  * `view.board.hexes`' reference staying stable across every future state
- * transition would be fragile. CatanScene instead pins the hexes array once
- * (see boardHexesRef below) and passes that fixed reference here, so this
- * ShaderMaterial is built exactly once per match, never recompiled.
+ * transition would be fragile. CatanScene passes the pinned board's hexes
+ * (see useStableBoard below) here, so this ShaderMaterial is built exactly
+ * once per match, never recompiled.
  */
 function Water({ hexes }: { hexes: CatanBoardData['hexes'] }) {
   const mat = useMemo(() => {
@@ -167,9 +166,40 @@ function qualityTier(): 'high' | 'low' {
   return new URLSearchParams(window.location.search).get('tier') === 'low' ? 'low' : 'high'
 }
 
+/**
+ * `board.hexes`/`board.ports` never change mid-match — only `board.robber`
+ * does (see robber.ts) — but the server pushes a brand-new `view` object on
+ * every snapshot (catanStore.ingestSnapshot just assigns `payload.view`
+ * wholesale), so `view.board` itself gets a fresh identity on every single
+ * snapshot even when its content is unchanged. Everything downstream that
+ * memoizes on `board`'s identity — CatanBoard's ScatterInstances (rewrites
+ * every scatter InstancedMesh's matrices), Pieces' Ports (rebuilds the boat
+ * list) and PortSigns (rebuilds the merged content mesh via SVGLoader/
+ * TextGeometry/mergeGeometries — the most expensive of the three) — was
+ * redoing that real work on every server push during a live match, not just
+ * when the layout actually changed. Measured via a temporary console-log
+ * probe on a 20s live solo-vs-3-bots match (see docs/PERF.md): 28 snapshots
+ * landed, and every one re-ran all three.
+ *
+ * Fix: pin the initial (static) board once, and only mint a new `board`
+ * identity when `robber` itself changes — the one field that's actually
+ * live. This keeps `board.hexes`/`board.ports` reference-stable across
+ * snapshots, so memoized consumers stop recomputing except on an actual
+ * robber move (a handful of times per match, not once per snapshot).
+ */
+function useStableBoard(view: CatanClientState): CatanBoardData {
+  const pinnedRef = useRef(view.board)
+  return useMemo(
+    () => ({ ...pinnedRef.current, robber: view.board.robber }),
+    [view.board.robber],
+  )
+}
+
 export function CatanScene({ view }: { view: CatanClientState }) {
-  // Pinned once on mount; see the Water doc comment above for why.
-  const boardHexesRef = useRef(view.board.hexes)
+  const board = useStableBoard(view)
+  // view.buildings/view.roads are still live per-snapshot (see Pieces' own
+  // consumers); only board's identity is pinned above.
+  const stableView = useMemo(() => ({ ...view, board }), [view, board])
   const tier = useRef(qualityTier()).current
 
   return (
@@ -181,11 +211,11 @@ export function CatanScene({ view }: { view: CatanClientState }) {
     >
       <SkyBackdrop />
       <GoldenHourRig />
-      <CatanBoard board={view.board} />
-      <Pieces view={view} />
-      <PickLayer view={view} />
-      <Highlights view={view} />
-      <Water hexes={boardHexesRef.current} />
+      <CatanBoard board={board} />
+      <Pieces view={stableView} />
+      <PickLayer view={stableView} />
+      <Highlights view={stableView} />
+      <Water hexes={board.hexes} />
       <OrbitControls
         target={[0, 0, 0]}
         enablePan={false}

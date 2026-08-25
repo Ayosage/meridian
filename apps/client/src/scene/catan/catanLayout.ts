@@ -4,12 +4,21 @@ import {
   spiralCoords,
   vertexId,
   edgeId,
+  type CatanBoard,
   type EdgeId,
+  type Port,
   type VertexId,
 } from '@meridian/rules'
 import { coordToWorld, TILE_SIZE } from '../layout'
 
 export const TILE_TOP = 0.22
+/**
+ * Ocean surface height — single source of truth shared by CatanScene.tsx
+ * (the water mesh itself) and PortSign.tsx (which anchors its posts below
+ * this line and its plaque above it). Kept here rather than in CatanScene
+ * to avoid a CatanScene -> Pieces -> PortSign -> CatanScene import cycle.
+ */
+export const WATER_Y = 0.05
 
 function centroid3(a: [number, number, number], b: typeof a, c: typeof a): [number, number, number] {
   return [(a[0] + b[0] + c[0]) / 3, TILE_TOP, (a[2] + b[2] + c[2]) / 3]
@@ -57,4 +66,45 @@ export function edgeWorld(): ReadonlyMap<EdgeId, { pos: [number, number, number]
     }
   }
   return ew
+}
+
+export interface PortPlacement {
+  key: string
+  position: [number, number, number]
+  /** Unit vector from the board center (origin) outward through the port's two-vertex midpoint. */
+  outX: number
+  outZ: number
+  kind: Port['kind']
+}
+
+/**
+ * World placement for every board port: its two-vertex midpoint pushed
+ * `push` units outward from the board center, at tile height. Shared by
+ * the port boat (Pieces.tsx) and its rate sign (PortSign.tsx) so both read
+ * off the same math — only `push` differs between them.
+ */
+export function portWorld(
+  board: CatanBoard,
+  vw: ReadonlyMap<VertexId, [number, number, number]>,
+  push: number,
+): PortPlacement[] {
+  const out: PortPlacement[] = []
+  board.ports.forEach((port, i) => {
+    const a = vw.get(port.vertices[0])
+    const b = vw.get(port.vertices[1])
+    if (!a || !b) return
+    const midX = (a[0] + b[0]) / 2
+    const midZ = (a[2] + b[2]) / 2
+    const len = Math.hypot(midX, midZ) || 1
+    const outX = midX / len
+    const outZ = midZ / len
+    out.push({
+      key: `${port.vertices[0]}-${port.vertices[1]}-${i}`,
+      position: [midX + outX * push, TILE_TOP, midZ + outZ * push],
+      outX,
+      outZ,
+      kind: port.kind,
+    })
+  })
+  return out
 }

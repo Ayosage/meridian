@@ -1,6 +1,7 @@
 import { RESOURCES } from '@meridian/rules'
 import { sendCatanIntent } from '../net/catan'
 import { discardSelectionTotal, useCatanStore } from '../scene/catan/catanStore'
+import { ResourceIcon } from './ResourceIcon'
 // Only App.tsx imports hud.css today; this also mounts standalone on the
 // /board dev route (BoardPreview), so it owns its own stylesheet dependency
 // rather than relying on whichever entry point happens to import it first.
@@ -35,7 +36,7 @@ export function DiscardModal() {
             const count = discardSelection[r]
             return (
               <div className="discard-row" key={r}>
-                <span className="discard-label">{r}</span>
+                <span className="discard-label"><ResourceIcon r={r} />{r}</span>
                 <button
                   type="button"
                   className="stepper-btn"

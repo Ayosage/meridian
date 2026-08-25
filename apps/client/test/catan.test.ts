@@ -81,13 +81,13 @@ beforeEach(() => {
 
 describe('catan net wiring', () => {
   it('createCatanMatch stores the room id and persists a room-keyed token', async () => {
-    await createCatanMatch(4)
+    await createCatanMatch(4, 0)
     expect(useCatanStore.getState().roomId).toBe('ROOM1')
     expect(tokenStorage.getFor('ROOM1')).toBe('tok-123')
   })
 
   it('lobby state change derives the seat and roster', async () => {
-    await createCatanMatch(4)
+    await createCatanMatch(4, 0)
     fake.room.pushState(lobbyOf(['sess-0', 'other'], [true, true]))
     const s = useCatanStore.getState()
     expect(s.seat).toBe(0)
@@ -96,7 +96,7 @@ describe('catan net wiring', () => {
   })
 
   it('MATCH_ENDED clears the room token so it cannot be auto-resumed later', async () => {
-    await createCatanMatch(4)
+    await createCatanMatch(4, 0)
     expect(tokenStorage.getFor('ROOM1')).toBe('tok-123')
 
     fake.room.pushMessage('matchEnded', { reason: 'win', winner: 1 })
@@ -109,7 +109,7 @@ describe('catan net wiring', () => {
   })
 
   it('sendCatanIntent forwards to the room', async () => {
-    await createCatanMatch(3)
+    await createCatanMatch(3, 0)
     sendCatanIntent({ type: 'rollDice' })
     expect(fake.room.sent).toEqual([{ type: 'intent', payload: { type: 'rollDice' } }])
   })

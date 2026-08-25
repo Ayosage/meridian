@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { standardTopology, vertexId, edgeId } from '@meridian/rules'
-import { vertexWorld, edgeWorld } from '../src/scene/catan/catanLayout'
+import { standardTopology, vertexId, edgeId, createCatanGame, createRng } from '@meridian/rules'
+import { vertexWorld, edgeWorld, portWorld, TILE_TOP } from '../src/scene/catan/catanLayout'
 import { coordToWorld } from '../src/scene/layout'
 
 describe('catanLayout', () => {
@@ -31,6 +31,38 @@ describe('catanLayout', () => {
     expect(e.pos[2]).toBeCloseTo((a[2] + b[2]) / 2, 5)
     // centers along +x → edge runs along z → +X-modeled road rotates 90°
     expect(Math.abs(Math.sin(e.angle))).toBeCloseTo(1, 5)
+  })
+
+  describe('portWorld', () => {
+    const { board } = createCatanGame({ playerCount: 4, layout: 'beginner' }, createRng(7))
+    const vw = vertexWorld()
+
+    it('places one entry per port, pushed outward from the board center at the given distance', () => {
+      const placements = portWorld(board, vw, 0.35)
+      expect(placements.length).toBe(board.ports.length)
+      for (const p of placements) {
+        expect(p.position[1]).toBe(TILE_TOP)
+        const midDist = Math.hypot(p.position[0] - p.outX * 0.35, p.position[2] - p.outZ * 0.35)
+        expect(Math.hypot(p.position[0], p.position[2]) - midDist).toBeCloseTo(0.35, 5)
+        // outX/outZ is the unit vector from the board center through the port
+        expect(Math.hypot(p.outX, p.outZ)).toBeCloseTo(1, 5)
+      }
+    })
+
+    it('carries each port\'s kind through unchanged', () => {
+      const placements = portWorld(board, vw, 0.35)
+      expect(placements.map((p) => p.kind)).toEqual(board.ports.map((p) => p.kind))
+    })
+
+    it('a larger push distance moves the sign farther from the board center', () => {
+      const near = portWorld(board, vw, 0.35)
+      const far = portWorld(board, vw, 0.9)
+      for (let i = 0; i < near.length; i++) {
+        const dNear = Math.hypot(near[i]!.position[0], near[i]!.position[2])
+        const dFar = Math.hypot(far[i]!.position[0], far[i]!.position[2])
+        expect(dFar).toBeGreaterThan(dNear)
+      }
+    })
   })
 
   it('rotating a +X-modeled road by edge.angle lays it along the edge, for all 6 directions', () => {

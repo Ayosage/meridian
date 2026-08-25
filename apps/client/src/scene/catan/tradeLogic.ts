@@ -1,6 +1,6 @@
 import type { CatanClientIntent } from '@meridian/protocol'
 import {
-  bankTradeRate, RESOURCES,
+  bankTradeRate, hasResources, RESOURCES,
   type CatanClientState, type Resource, type ResourceCount,
 } from '@meridian/rules'
 
@@ -86,6 +86,41 @@ export type ResponseSummary = { seat: number } & (
   | { kind: 'reject' }
   | { kind: 'counter'; youGive: Partial<ResourceCount>; youGet: Partial<ResourceCount> }
 )
+
+/**
+ * Pure: should the mute-toggle auto-decline effect fire right now? Muted,
+ * offer unanswered, and not already pending a decline we sent — that last
+ * guard is what stops a spam of rejects while our own `respondTrade` is
+ * still in flight to the server (before a snapshot round-trip records it in
+ * `responses`); see `autoDeclineIfMuted` in catanStore.ts.
+ */
+export function shouldAutoDecline(
+  view: CatanClientState,
+  seat: number,
+  muted: boolean,
+  declinePending: boolean,
+): boolean {
+  if (!muted || declinePending) return false
+  const offer = incomingOfferFor(view, seat)
+  return offer !== null && !offer.responded
+}
+
+/** Pure: should IncomingOffer's banner render? Never while muted — those offers auto-decline silently. */
+export function shouldShowOfferBanner(view: CatanClientState, seat: number, muted: boolean): boolean {
+  return !muted && incomingOfferFor(view, seat) !== null
+}
+
+/**
+ * Pure: can this seat actually pay for the incoming offer's `youGive` side
+ * (what accepting would cost)? Gates the Accept button — the engine's
+ * `applyRespondTrade` doesn't reject an unaffordable plain accept itself
+ * (only counters), so an unguarded Accept can post a response that later
+ * bounces at confirm-time with CANT_AFFORD.
+ */
+export function canAcceptOffer(view: CatanClientState, seat: number): boolean {
+  const offer = incomingOfferFor(view, seat)
+  return offer !== null && hasResources(view.you.resources, offer.youGive)
+}
 
 /** Per-opponent response status as the offerer sees it, or null if this seat isn't the offerer. */
 export function offerResponsesFor(view: CatanClientState, seat: number): ResponseSummary[] | null {

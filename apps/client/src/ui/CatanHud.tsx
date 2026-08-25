@@ -4,6 +4,8 @@ import { leaveCatanMatch, sendCatanIntent } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
 import { playerCards } from '../scene/catan/hudLogic'
 import { seatColor } from '../scene/catan/palette'
+import { ActionLog } from './ActionLog'
+import { ResourceIcon } from './ResourceIcon'
 // Only App.tsx imports hud.css today; this also mounts standalone wherever
 // CatanHud is used, so it owns its own stylesheet dependency rather than
 // relying on whichever entry point happens to import it first.
@@ -41,7 +43,7 @@ function HandStrip({ view }: { view: CatanClientState }) {
     <div className="hand-strip">
       {RESOURCES.map((r) => (
         <div className="hand-count" key={r} data-testid={`hand-${r}`}>
-          <span className="hand-label">{r}</span>
+          <span className="hand-label"><ResourceIcon r={r} />{r}</span>
           <span className="hand-value">{view.you.resources[r]}</span>
         </div>
       ))}
@@ -133,6 +135,9 @@ export function CatanHud() {
     <div className="overlay catan-hud">
       <TurnBanner view={view} seat={seat} connected={connected} />
       <DiceDisplay dice={view.turn.dice} />
+      <div className="orbit-hint" data-testid="orbit-hint">
+        drag to rotate · scroll to zoom
+      </div>
       <button
         type="button"
         className="roll-button"
@@ -152,7 +157,10 @@ export function CatanHud() {
         END TURN
       </button>
       <HandStrip view={view} />
-      <PlayerStrip view={view} seat={seat} connected={connected} />
+      <div className="right-rail">
+        <PlayerStrip view={view} seat={seat} connected={connected} />
+        <ActionLog />
+      </div>
       <Toast />
       <WinOverlay view={view} />
     </div>

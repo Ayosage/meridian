@@ -14,18 +14,25 @@ export default defineConfig({
     // in new-headless mode (measured 120fps, same as headed).
     launchOptions: { args: ['--use-angle=metal', '--enable-gpu'] },
   },
+  // Both servers are started fresh, never reused. Reuse silently hands the
+  // suite whatever already listens on 5173/2567 — a dev server from another
+  // worktree, or one left orphaned by an earlier run with rooms and timers
+  // still accumulating — so the suite ends up testing a checkout that isn't
+  // this one, and the resulting failures look like flakes. With reuse off, a
+  // busy port fails the run immediately and by name; kill the stale listener
+  // (`lsof -ti:5173,2567 | xargs kill -9`) and re-run.
   webServer: [
     {
       command: 'pnpm --filter server start',
       cwd: '../..',
       port: 2567,
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       timeout: 30_000,
     },
     {
       command: 'pnpm dev',
       port: 5173,
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       timeout: 30_000,
     },
   ],

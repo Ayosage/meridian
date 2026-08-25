@@ -25,6 +25,8 @@ export function BuildBar() {
   const toggleBuildMode = useCatanStore((s) => s.toggleBuildMode)
   const tradeOpen = useCatanStore((s) => s.tradeOpen)
   const toggleTrade = useCatanStore((s) => s.toggleTrade)
+  const tradeMute = useCatanStore((s) => s.tradeMute)
+  const toggleTradeMute = useCatanStore((s) => s.toggleTradeMute)
 
   const canBuild = (cost: keyof typeof COSTS): boolean =>
     view !== null &&
@@ -67,6 +69,14 @@ export function BuildBar() {
         onClick={toggleTrade}
       >
         Trade
+      </button>
+      <button
+        type="button"
+        data-testid="trade-mute-toggle"
+        className={tradeMute ? 'mute-pill active' : 'mute-pill'}
+        onClick={toggleTradeMute}
+      >
+        {tradeMute ? 'Trades muted' : 'Mute trades'}
       </button>
     </div>
   )

@@ -2,6 +2,7 @@ import { RESOURCES } from '@meridian/rules'
 import { sendCatanIntent } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
 import { selectionTotal } from '../scene/catan/tradeLogic'
+import { ResourceIcon } from './ResourceIcon'
 import './hud.css'
 
 /** Take-two-from-the-bank picker (design spec §3), DiscardModal pattern. */
@@ -25,7 +26,7 @@ export function YearOfPlentyModal() {
         <div className="discard-rows">
           {RESOURCES.map((r) => (
             <div className="discard-row" key={r}>
-              <span className="discard-label">{r}</span>
+              <span className="discard-label"><ResourceIcon r={r} />{r}</span>
               <button type="button" className="stepper-btn" data-testid={`plenty-minus-${r}`} disabled={plentySelection[r] <= 0} onClick={() => decPlenty(r)}>&minus;</button>
               <span className="discard-value">{plentySelection[r]}</span>
               <button type="button" className="stepper-btn" data-testid={`plenty-plus-${r}`} disabled={selected >= 2 || plentySelection[r] >= view.bank[r]} onClick={() => incPlenty(r)}>+</button>

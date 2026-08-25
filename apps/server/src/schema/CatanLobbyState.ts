@@ -8,6 +8,8 @@ import { ArraySchema, Schema, type } from '@colyseus/schema'
 export class CatanLobbyState extends Schema {
   @type('string') phase: 'waiting' | 'playing' | 'ended' = 'waiting'
   @type('number') targetPlayers = 4
+  /** Trailing seats reserved for native bots (native-bots design spec §2). */
+  @type('number') botCount = 0
   /** sessionIds by seat index */
   @type(['string']) seats = new ArraySchema<string>()
   /** per-seat presence — false means the pilot is driving (spec §4) */

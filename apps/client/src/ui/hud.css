@@ -101,6 +101,18 @@
 }
 .build-bar-btn.active { background: #2c6e8f; border-color: #7fc8e8; color: #fff; }
 .build-bar-btn:disabled { opacity: 0.4; cursor: default; }
+.mute-pill {
+  align-self: center;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  border: 1px solid rgba(127, 200, 232, 0.35);
+  border-radius: 999px;
+  background: #20222b;
+  color: #e8e8f0;
+  cursor: pointer;
+}
+.mute-pill.active { background: #6e2c2c; border-color: #e87f7f; color: #fff; }
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -125,7 +137,7 @@
 .modal-title { font-size: 16px; font-weight: 700; text-align: center; }
 .discard-rows { display: flex; flex-direction: column; gap: 8px; }
 .discard-row { display: flex; align-items: center; gap: 10px; }
-.discard-label { flex: 1; text-transform: capitalize; font-size: 14px; }
+.discard-label { flex: 1; display: flex; align-items: center; gap: 6px; text-transform: capitalize; font-size: 14px; }
 .discard-value { min-width: 4.5em; text-align: center; font-size: 14px; font-variant-numeric: tabular-nums; }
 .stepper-btn {
   width: 28px;
@@ -186,6 +198,15 @@
   background: #6b5b1f;
   color: #f4d97a;
 }
+.orbit-hint {
+  position: absolute;
+  top: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  opacity: 0.55;
+  pointer-events: none;
+}
 .catan-hud .dice-display {
   position: absolute;
   top: 56px;
@@ -228,15 +249,58 @@
   min-width: 3.5em;
   font-size: 12px;
 }
-.hand-count .hand-label { text-transform: capitalize; opacity: 0.75; }
+.hand-count .hand-label { display: inline-flex; align-items: center; gap: 4px; text-transform: capitalize; opacity: 0.75; }
 .hand-count .hand-value { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.catan-hud .opponent-strip {
+.catan-hud .right-rail {
   position: absolute;
   top: 12px;
   right: 12px;
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+.catan-hud .opponent-strip {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
+}
+
+/* Action log (Task 15): ticker under the player cards; header toggles history. */
+.action-log {
+  width: 210px;
+  font-size: 11px;
+  color: #d8d2c4;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.action-log-header {
+  align-self: flex-end;
+  background: rgba(10, 14, 18, 0.55);
+  color: #d8d2c4;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.action-log-entry {
+  background: rgba(10, 14, 18, 0.55);
+  border-radius: 4px;
+  padding: 3px 6px;
+  line-height: 1.5;
+}
+.action-log-entry.affects-you {
+  background: rgba(44, 110, 143, 0.45);
+}
+.action-log-entry .log-seat { font-weight: 600; }
+.action-log-entry .log-res svg { width: 12px; height: 12px; vertical-align: -2px; }
+.action-log-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 46vh;
+  overflow-y: auto;
 }
 .opponent-card {
   background: rgba(12, 14, 20, 0.8);
@@ -304,12 +368,7 @@
   cursor: pointer;
 }
 .mini-btn:disabled { opacity: 0.35; cursor: default; }
-.res-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
-.res-wood { background: #6a9a58; }
-.res-brick { background: #b0603f; }
-.res-sheep { background: #a8c67a; }
-.res-wheat { background: #d9b95c; }
-.res-ore { background: #8a94a6; }
+.res-icon { width: 15px; height: 15px; display: inline-block; flex: none; vertical-align: -3px; }
 .res-chip {
   display: inline-flex;
   align-items: center;
@@ -345,6 +404,7 @@
 .offer-actions { display: flex; gap: 8px; }
 .offer-actions button { flex: 1; padding: 9px 0; font-size: 13px; font-family: inherit; border-radius: 6px; cursor: pointer; }
 .accept-btn { border: 0; background: #4a8f5c; color: #fff; }
+.accept-btn:disabled { opacity: 0.4; cursor: default; }
 .counter-btn { border: 1px solid rgba(127, 200, 232, 0.35); background: #20222b; color: #e8e8f0; }
 .decline-btn { border: 1px solid rgba(255, 128, 128, 0.4); background: #20222b; color: #ff8080; }
 .response-rows { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(232, 232, 240, 0.08); padding-top: 10px; }

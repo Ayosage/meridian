@@ -1,15 +1,14 @@
 import {
   coordKey,
+  greedyDiscard,
   hasResources,
   legalSettlementVertices,
   pick,
-  RESOURCES,
   standardTopology,
   totalResources,
   type CatanIntent,
   type CatanState,
   type PlayerId,
-  type Resource,
   type Rng,
 } from '@meridian/rules'
 
@@ -66,26 +65,6 @@ export function pilotIntent(state: CatanState, seat: PlayerId, rng: Rng): CatanI
     default:
       return null
   }
-}
-
-/** Shed from the largest piles first; ties broken in RESOURCES order. */
-function greedyDiscard(
-  state: CatanState,
-  seat: PlayerId,
-  owed: number,
-): Partial<Record<Resource, number>> {
-  const hand = { ...state.players[seat]!.resources }
-  const out: Partial<Record<Resource, number>> = {}
-  let remaining = owed
-  while (remaining > 0) {
-    let best: Resource = RESOURCES[0]!
-    for (const r of RESOURCES) if (hand[r] > hand[best]) best = r
-    const take = Math.min(hand[best], remaining)
-    out[best] = (out[best] ?? 0) + take
-    hand[best] -= take
-    remaining -= take
-  }
-  return out
 }
 
 function robberMove(state: CatanState, seat: PlayerId, rng: Rng): CatanIntent {

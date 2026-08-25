@@ -2,8 +2,9 @@ import { useMemo } from 'react'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import type { CatanBoard, CatanClientState, EdgeId, VertexId } from '@meridian/rules'
-import { edgeWorld, TILE_TOP, vertexWorld } from './catanLayout'
+import { edgeWorld, portWorld, vertexWorld, TILE_TOP } from './catanLayout'
 import { RESOURCE_COLORS, seatColor } from './palette'
+import { PortSigns } from './PortSign'
 
 const ASSETS = '/assets/slice'
 /** How far a port is pushed out from its two-vertex midpoint, away from the board center. */
@@ -105,37 +106,74 @@ function Roads({ roads }: { roads: CatanClientState['roads'] }) {
   )
 }
 
+/**
+ * Small deterministic hash -> a stable per-key angle jitter in
+ * [-maxRadians, maxRadians]. Not Math.random(): a boat's heading must stay
+ * fixed across re-renders (same key -> same jitter every time), not
+ * re-roll whenever the component re-mounts.
+ */
+function seededAngleJitter(key: string, maxRadians: number): number {
+  let h = 0
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0
+  const unit = (Math.abs(h) % 1000) / 1000
+  return (unit * 2 - 1) * maxRadians
+}
+
+/**
+ * Two boats per port — one docked off each of the port's two vertices,
+ * not one at the shared midpoint — so which two spaces the port actually
+ * serves reads at a glance (user request). Each keeps the port's own
+ * outward push/direction (so both still read as "this port's boats," docked
+ * beside it rather than scattered), with a small per-boat heading jitter
+ * (seeded off its vertex id, not random per render) so a pair doesn't look
+ * like a stamped formation.
+ */
 function Ports({ board }: { board: CatanBoard }) {
   const portSrc = useSliceGltf('port')
   const vw = vertexWorld()
+  const placements = useMemo(() => portWorld(board, vw, PORT_PUSH), [board, vw])
+
+  const boats = useMemo(() => {
+    const list: {
+      key: string
+      position: [number, number, number]
+      rotation: [number, number, number]
+      color: string | null
+    }[] = []
+    board.ports.forEach((port, i) => {
+      const p = placements[i]
+      if (!p) return
+      const baseAngle = Math.atan2(p.outX, p.outZ)
+      const color = port.kind === 'generic' ? null : RESOURCE_COLORS[port.kind]
+      for (const vId of port.vertices) {
+        const vPos = vw.get(vId)
+        if (!vPos) continue
+        list.push({
+          key: `${p.key}-${vId}`,
+          position: [vPos[0] + p.outX * PORT_PUSH, TILE_TOP, vPos[2] + p.outZ * PORT_PUSH],
+          // face the board center (the port's shared outward direction),
+          // same "local -Z is front" convention as before, jittered per boat
+          rotation: [0, baseAngle + seededAngleJitter(vId, 0.35), 0],
+          color,
+        })
+      }
+    })
+    return list
+  }, [board, placements, vw])
+
   return (
     <>
-      {board.ports.map((port, i) => {
-        const a = vw.get(port.vertices[0])
-        const b = vw.get(port.vertices[1])
-        if (!a || !b) return null
-        const midX = (a[0] + b[0]) / 2
-        const midZ = (a[2] + b[2]) / 2
-        const len = Math.hypot(midX, midZ) || 1
-        // unit vector from board center (origin) outward through the midpoint
-        const outX = midX / len
-        const outZ = midZ / len
-        const position: [number, number, number] = [midX + outX * PORT_PUSH, TILE_TOP, midZ + outZ * PORT_PUSH]
-        // face the board center: rotate so the model's local -Z axis (its
-        // export-convention "front") points back toward the origin
-        const rotation: [number, number, number] = [0, Math.atan2(outX, outZ), 0]
-        const color = port.kind === 'generic' ? null : RESOURCE_COLORS[port.kind]
-        return (
-          <TintedPiece
-            key={`${port.vertices[0]}-${port.vertices[1]}-${i}`}
-            source={portSrc}
-            color={color}
-            matchName="sail"
-            position={position}
-            rotation={rotation}
-          />
-        )
-      })}
+      {boats.map((b) => (
+        <TintedPiece
+          key={b.key}
+          source={portSrc}
+          color={b.color}
+          matchName="sail"
+          position={b.position}
+          rotation={b.rotation}
+        />
+      ))}
+      <PortSigns placements={placements} />
     </>
   )
 }

@@ -1,7 +1,9 @@
+import { useEffect } from 'react'
 import { RESOURCES, type Resource } from '@meridian/rules'
 import { sendCatanIntent } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
-import { incomingOfferFor } from '../scene/catan/tradeLogic'
+import { canAcceptOffer, incomingOfferFor, shouldShowOfferBanner } from '../scene/catan/tradeLogic'
+import { ResourceIcon } from './ResourceIcon'
 import { StepperRow } from './TradePanel'
 import './hud.css'
 
@@ -10,7 +12,7 @@ function TermChips({ terms }: { terms: Partial<Record<Resource, number>> }) {
     <>
       {RESOURCES.filter((r) => (terms[r] ?? 0) > 0).map((r) => (
         <span className="res-chip" key={r}>
-          <span className={`res-dot res-${r}`} />
+          <ResourceIcon r={r} />
           {terms[r]} {r}
         </span>
       ))}
@@ -27,6 +29,8 @@ export function IncomingOffer() {
   const view = useCatanStore((s) => s.view)
   const seat = useCatanStore((s) => s.seat)
   const mode = useCatanStore((s) => s.mode)
+  const tradeMute = useCatanStore((s) => s.tradeMute)
+  const autoDeclineIfMuted = useCatanStore((s) => s.autoDeclineIfMuted)
   const counterDraft = useCatanStore((s) => s.counterDraft)
   const respondToOffer = useCatanStore((s) => s.respondToOffer)
   const startCounter = useCatanStore((s) => s.startCounter)
@@ -37,10 +41,16 @@ export function IncomingOffer() {
   const incCounterGet = useCatanStore((s) => s.incCounterGet)
   const decCounterGet = useCatanStore((s) => s.decCounterGet)
 
+  // Unconditional (before any early return, per React's rules of hooks) so it
+  // still runs on every snapshot even when the component itself renders null.
+  useEffect(() => {
+    autoDeclineIfMuted(sendCatanIntent)
+  }, [view, seat, tradeMute, autoDeclineIfMuted])
+
   if (view === null || seat === null) return null
   if (mode.kind === 'discard' || mode.kind === 'robber' || mode.kind === 'steal') return null
-  const offer = incomingOfferFor(view, seat)
-  if (!offer) return null
+  if (!shouldShowOfferBanner(view, seat, tradeMute)) return null
+  const offer = incomingOfferFor(view, seat)!
 
   return (
     <div className="offer-banner" data-testid="offer-banner">
@@ -72,7 +82,15 @@ export function IncomingOffer() {
             </div>
           </div>
           <div className="offer-actions">
-            <button type="button" className="accept-btn" data-testid="offer-accept" onClick={() => respondToOffer('accept', sendCatanIntent)}>Accept</button>
+            <button
+              type="button"
+              className="accept-btn"
+              data-testid="offer-accept"
+              disabled={!canAcceptOffer(view, seat)}
+              onClick={() => respondToOffer('accept', sendCatanIntent)}
+            >
+              Accept
+            </button>
             <button type="button" className="counter-btn" data-testid="offer-counter" onClick={startCounter}>Counter</button>
             <button type="button" className="decline-btn" data-testid="offer-decline" onClick={() => respondToOffer('reject', sendCatanIntent)}>Decline</button>
           </div>
