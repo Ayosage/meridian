@@ -1,12 +1,9 @@
 import { RESOURCES, type CatanClientState, type Resource } from '@meridian/rules'
 import { sendCatanIntent } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
+import { ResourceIcon } from './ResourceIcon'
 import { bankRates, offerResponsesFor, selectionTotal, type ResourceSelection } from '../scene/catan/tradeLogic'
 import './hud.css'
-
-function ResDot({ r }: { r: Resource }) {
-  return <span className={`res-dot res-${r}`} />
-}
 
 /** Chip list for one side of posted terms, e.g. "2 wood". */
 function TermChips({ terms }: { terms: Partial<Record<Resource, number>> }) {
@@ -14,7 +11,7 @@ function TermChips({ terms }: { terms: Partial<Record<Resource, number>> }) {
     <>
       {RESOURCES.filter((r) => (terms[r] ?? 0) > 0).map((r) => (
         <span className="res-chip" key={r}>
-          <ResDot r={r} />
+          <ResourceIcon r={r} />
           {terms[r]} {r}
         </span>
       ))}
@@ -37,7 +34,7 @@ export function StepperRow({
     <div className="res-stepper-row">
       {RESOURCES.map((r) => (
         <div className={hand !== null && hand[r] === 0 ? 'res-stepper depleted' : 'res-stepper'} key={r}>
-          <span className="res-name"><ResDot r={r} />{r}</span>
+          <span className="res-name"><ResourceIcon r={r} />{r}</span>
           <span className="res-count">{sel[r]}</span>
           <div className="steppers">
             <button type="button" className="mini-btn" data-testid={`${prefix}-minus-${r}`} disabled={sel[r] <= 0} onClick={() => onDec(r)}>&minus;</button>
@@ -107,7 +104,7 @@ function Composer({ view, seat }: { view: CatanClientState; seat: number }) {
                 disabled={view.you.resources[r] < rates[r]}
                 onClick={() => setBankGive(r)}
               >
-                <span className="res-name"><ResDot r={r} />{r}</span>
+                <span className="res-name"><ResourceIcon r={r} />{r}</span>
                 <span className="bank-rate">{rates[r]}:1</span>
               </button>
             ))}
@@ -123,7 +120,7 @@ function Composer({ view, seat }: { view: CatanClientState; seat: number }) {
                 disabled={view.bank[r] < 1}
                 onClick={() => setBankGet(r)}
               >
-                <span className="res-name"><ResDot r={r} />{r}</span>
+                <span className="res-name"><ResourceIcon r={r} />{r}</span>
               </button>
             ))}
           </div>

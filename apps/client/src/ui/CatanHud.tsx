@@ -4,6 +4,7 @@ import { leaveCatanMatch, sendCatanIntent } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
 import { playerCards } from '../scene/catan/hudLogic'
 import { seatColor } from '../scene/catan/palette'
+import { ResourceIcon } from './ResourceIcon'
 // Only App.tsx imports hud.css today; this also mounts standalone wherever
 // CatanHud is used, so it owns its own stylesheet dependency rather than
 // relying on whichever entry point happens to import it first.
@@ -41,7 +42,7 @@ function HandStrip({ view }: { view: CatanClientState }) {
     <div className="hand-strip">
       {RESOURCES.map((r) => (
         <div className="hand-count" key={r} data-testid={`hand-${r}`}>
-          <span className="hand-label">{r}</span>
+          <span className="hand-label"><ResourceIcon r={r} />{r}</span>
           <span className="hand-value">{view.you.resources[r]}</span>
         </div>
       ))}

@@ -1,6 +1,7 @@
 import { RESOURCES } from '@meridian/rules'
 import { sendCatanIntent } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
+import { ResourceIcon } from './ResourceIcon'
 import './hud.css'
 
 /** Name-a-resource picker (design spec §3): click = play. */
@@ -19,7 +20,7 @@ export function MonopolyModal() {
         <div className="steal-victims">
           {RESOURCES.map((r) => (
             <button type="button" className="steal-victim-btn" key={r} data-testid={`monopoly-pick-${r}`} onClick={() => submitMonopoly(r, sendCatanIntent)}>
-              <span className={`res-dot res-${r}`} /> {r}
+              <ResourceIcon r={r} /> {r}
             </button>
           ))}
         </div>

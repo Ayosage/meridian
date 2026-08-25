@@ -3,6 +3,7 @@ import { RESOURCES, type Resource } from '@meridian/rules'
 import { sendCatanIntent } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
 import { canAcceptOffer, incomingOfferFor, shouldShowOfferBanner } from '../scene/catan/tradeLogic'
+import { ResourceIcon } from './ResourceIcon'
 import { StepperRow } from './TradePanel'
 import './hud.css'
 
@@ -11,7 +12,7 @@ function TermChips({ terms }: { terms: Partial<Record<Resource, number>> }) {
     <>
       {RESOURCES.filter((r) => (terms[r] ?? 0) > 0).map((r) => (
         <span className="res-chip" key={r}>
-          <span className={`res-dot res-${r}`} />
+          <ResourceIcon r={r} />
           {terms[r]} {r}
         </span>
       ))}
