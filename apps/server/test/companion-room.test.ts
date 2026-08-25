@@ -304,12 +304,20 @@ describe('CatanRoom with native bots', () => {
 
     const token = c.reconnectionToken
     await c.leave(true) // consented drop; CatanRoom's onLeave always allows reconnection (spec §4)
-    await settle(30)
+    await settle(30) // let the server's onLeave finish before sampling
 
     // Paused: humansConnected() === 0, so schedulePilot refuses to drive any
     // bot seat even though whole rounds of bot-only setup turns remain.
-    await settle(150) // a few bot delay periods (30ms each)
-    expect(room.game!.seq).toBe(seqBeforeDrop)
+    // Sample repeatedly across the pause window rather than once at the end
+    // — a single end-of-window read can't tell "never advanced" from
+    // "advanced and came back", and can't catch a transient advance that
+    // happens to land back on seqBeforeDrop by the time it's read. Six
+    // checkpoints 30ms apart (this test's botDelayMs cadence) span several
+    // would-be bot actions.
+    for (let i = 0; i < 6; i++) {
+      expect(room.game!.seq).toBe(seqBeforeDrop)
+      await settle(30)
+    }
 
     const c2 = await server.sdk.reconnect(token)
     const sink2: CatanSnapshotPayload[] = []
