@@ -39,7 +39,7 @@ const GENERIC_RATE_COLOR = '#f2e6c9'
  * Combining both — push further out (guarantees open water) *and* to the
  * side (clears the boat) — satisfies both.
  */
-const RAFT_EXTRA_OUTWARD = 0.85
+const RAFT_EXTRA_OUTWARD = 1.05
 const RAFT_LATERAL_OFFSET = 0.45
 
 // --- Raft deck placement. raft.glb's object origin sits at the deck's
@@ -50,8 +50,15 @@ const RAFT_LATERAL_OFFSET = 0.45
 // WATER_Y keeps the deck's own bottom from z-fighting the water plane.
 const RAFT_Y_MARGIN = 0.015
 const RAFT_DECK_HEIGHT = 0.07
+/**
+ * Uniform grow-factor for the whole raft presentation (deck instances +
+ * content sizes below). The craftsmanship pass added 10x geometry that is
+ * invisible at ~40px on screen — at gameplay zoom only size, silhouette,
+ * and contrast register, so the raft reads bigger rather than finer.
+ */
+const RAFT_SCALE = 1.3
 const RAFT_ORIGIN_Y = WATER_Y + RAFT_Y_MARGIN
-const RAFT_TOP_Y = RAFT_ORIGIN_Y + RAFT_DECK_HEIGHT
+const RAFT_TOP_Y = RAFT_ORIGIN_Y + RAFT_DECK_HEIGHT * RAFT_SCALE
 
 // --- Content: the resource icon + trade-rate text, embossed proud on the
 // raft's top face, lying flat and reading straight up toward the camera —
@@ -69,12 +76,12 @@ const CONTENT_GAP = 0.01
 const CONTENT_DEPTH = 0.03
 const ICON_VIEWBOX = 24
 /** World-unit height the 24x24 icon viewBox is scaled to. */
-const ICON_SIZE = 0.2
-const ICON_LOCAL_X = -0.21
+const ICON_SIZE = 0.26
+const ICON_LOCAL_X = -0.27
 /** "2:1" sits beside its icon; "3:1" (no icon) is centered on the deck. */
-const RATE_TEXT_SIZE = 0.2
+const RATE_TEXT_SIZE = 0.26
 const RATE_TEXT_CURVE_SEGMENTS = 8
-const RATE_TEXT_X_PAIRED = 0.13
+const RATE_TEXT_X_PAIRED = 0.17
 const RATE_TEXT_X_ALONE = 0
 
 // --- Ink backing: a thin dark wafer under the icon+rate (token-style ink
@@ -84,8 +91,8 @@ const RATE_TEXT_X_ALONE = 0
 // to the deck's own wood tones (wheat's tan especially) read low-contrast
 // directly on bare planks; a dark backing gives every resource color the
 // same contrast floor instead of special-casing wheat's hex value alone.
-const INK_BACKING_W = 0.58
-const INK_BACKING_D = 0.26
+const INK_BACKING_W = 0.74
+const INK_BACKING_D = 0.33
 const INK_BACKING_HEIGHT = 0.012
 const INK_BACKING_Y = RAFT_TOP_Y + CONTENT_GAP + INK_BACKING_HEIGHT / 2
 const CONTENT_Y = INK_BACKING_Y + INK_BACKING_HEIGHT / 2 + CONTENT_GAP + CONTENT_DEPTH / 2
@@ -94,6 +101,7 @@ const CONTENT_Y = INK_BACKING_Y + INK_BACKING_HEIGHT / 2 + CONTENT_GAP + CONTENT
 function noRaycast() {}
 
 const SCRATCH_MATRIX = new THREE.Matrix4()
+const RAFT_SCALE_V3 = new THREE.Vector3(RAFT_SCALE, RAFT_SCALE, RAFT_SCALE)
 const SCRATCH_COLOR = new THREE.Color()
 
 /**
@@ -173,7 +181,7 @@ function RaftInstances({
     const inst = ref.current
     if (!inst) return
     positions.forEach((p, i) => {
-      SCRATCH_MATRIX.makeRotationY(rotationsY[i]!).setPosition(p[0], p[1], p[2])
+      SCRATCH_MATRIX.makeRotationY(rotationsY[i]!).scale(RAFT_SCALE_V3).setPosition(p[0], p[1], p[2])
       inst.setMatrixAt(i, SCRATCH_MATRIX)
     })
     inst.instanceMatrix.needsUpdate = true
