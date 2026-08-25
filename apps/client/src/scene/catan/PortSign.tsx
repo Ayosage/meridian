@@ -194,15 +194,13 @@ function RaftInstances({
 }
 
 /**
- * Content faces straight up into a low-elevation sun (~20°, see rig.tsx):
- * a horizontal face gets a much more grazing, dimmer hit of direct light
- * than the vertical faces the rest of the rig's assets are tuned for, so
- * mid-brightness RESOURCE_COLORS values (ore's slate gray in particular)
- * read muddier here than their raw hex would suggest. A flat multiplier on
- * the baked vertex color compensates without touching the shared palette
- * or the rig's lighting (both used well beyond this one layer).
+ * Set back to 1.0 after the winding fix below (see buildIconGeometry):
+ * black icons were originally (mis)diagnosed as a lighting problem and
+ * "fixed" with a 1.3x multiplier here, which changed nothing because the
+ * real cause was upstream of any color value reaching the shader at all.
+ * Kept as a hook in case the correctly-lit colors genuinely need a nudge.
  */
-const CONTENT_BRIGHTNESS = 1.3
+const CONTENT_BRIGHTNESS = 1.0
 
 /** Uniform-color clone of a base (uncolored) geometry — reused to bake a different tint per port onto the same rate-text shape. */
 function colorize(base: THREE.BufferGeometry, hex: string): THREE.BufferGeometry {
@@ -228,21 +226,50 @@ function colorize(base: THREE.BufferGeometry, hex: string): THREE.BufferGeometry
 const SHADOW_Z_NUDGE_RAW = 0.5
 
 /**
+ * Flips a Shape's Y coordinates (screen-down -> font/world-up) *before*
+ * extrusion, by re-tessellating it into plain polygons (extractPoints)
+ * and rebuilding a fresh Shape/Path from the negated points instead of
+ * mirroring the built 3D geometry afterward. That was the original
+ * approach (`merged.scale(scale, -scale, scale)`) and it was wrong: a
+ * mirror baked directly into vertex positions flips winding as the
+ * rasterizer sees it, but three.js has no way to know that after the
+ * fact — unlike a live Object3D negative scale, which the renderer
+ * specially detects and compensates for, a mirror baked into raw
+ * BufferGeometry data is invisible to that compensation. With the
+ * content material's `DoubleSide`, three.js flips the *shading* normal
+ * based on `gl_FrontFacing` (a winding-derived, hardware-computed
+ * front/back test) to keep double-sided surfaces lit correctly from
+ * either side — but that assumes winding and the stored normal still
+ * agree. After the un-compensated mirror they didn't, so the visible cap
+ * consistently got a normal facing away from the light: geometrically
+ * present, correctly vertex-colored, and rendered fully unlit (black)
+ * regardless of resource. Flipping the *2D shape* first sidesteps the
+ * whole problem: ExtrudeGeometry computes correct winding for whatever
+ * shape it's given, so there's no mirror left to compensate for.
+ */
+function flipShapeY(shape: THREE.Shape, divisions: number): THREE.Shape {
+  const { shape: outer, holes } = shape.extractPoints(divisions)
+  const flipped = new THREE.Shape(outer.map((p) => new THREE.Vector2(p.x, -p.y)))
+  for (const hole of holes) {
+    flipped.holes.push(new THREE.Path(hole.map((p) => new THREE.Vector2(p.x, -p.y))))
+  }
+  return flipped
+}
+
+/**
  * Converts one resource's icon path data (RESOURCE_ICON_PATHS — the same
  * data ResourceIcon.tsx draws as a 2D <svg>, single source of truth) into
  * flat extruded geometry via SVGLoader, vertex-colored with the icon's own
- * two-tone main/shadow fill. SVG authors Y-down; scaling Y negative first
- * (screen-down -> font-up) then applying the same rotateX(-90°) treatment
- * TextGeometry gets below lays the icon flat, extrude-axis pointing world
- * +Y (up, proud) and glyph-up pointing world -Z — reading correctly under
- * the board's fixed oblique camera, same as the number tokens. The Y-flip
- * inverts winding, so the shared content material renders DoubleSide
- * rather than depending on getting handedness exactly right.
+ * two-tone main/shadow fill. The Y-flip (flipShapeY) plus the same
+ * rotateX(-90°) treatment TextGeometry gets below lays the icon flat,
+ * extrude-axis pointing world +Y (up, proud) and glyph-up pointing world
+ * -Z — reading correctly under the board's fixed oblique camera, same as
+ * the number tokens.
  *
  * The extrude depth is specified in the icon's own raw 24-unit viewBox
  * space, not world units directly: ExtrudeGeometry builds the shape's X/Y
  * *and* its Z (depth) in that same local space, and the later uniform
- * `scale(scale, -scale, scale)` divides all three by ~120x (ICON_VIEWBOX /
+ * `scale(scale, scale, scale)` divides all three by ~120x (ICON_VIEWBOX /
  * ICON_SIZE) to reach world size. Passing CONTENT_DEPTH (a world-unit
  * value) straight to `depth` would let that scale-down shrink the relief
  * to a ~0.00025-unit sliver — invisible, and too thin for SHADOW_Z_NUDGE
@@ -273,7 +300,8 @@ function buildIconGeometry(resource: Resource, loader: SVGLoader): THREE.BufferG
   // cleanly, matching the 2D paint order.
   paths.forEach((path, pathIndex) => {
     for (const shape of SVGLoader.createShapes(path)) {
-      const geo = new THREE.ExtrudeGeometry(shape, {
+      const flipped = flipShapeY(shape, 12)
+      const geo = new THREE.ExtrudeGeometry(flipped, {
         depth: rawDepth,
         bevelEnabled: false,
         curveSegments: 8,
@@ -293,7 +321,7 @@ function buildIconGeometry(resource: Resource, loader: SVGLoader): THREE.BufferG
   })
   const merged = mergeGeometries(parts, false)
   parts.forEach((g) => g.dispose())
-  merged.scale(scale, -scale, scale)
+  merged.scale(scale, scale, scale)
   merged.rotateX(-Math.PI / 2)
   merged.center()
   return merged
@@ -392,7 +420,6 @@ export function PortSigns({ placements }: { placements: readonly PortPlacement[]
         // fragmenting the digit's silhouette into confusing bright/dark
         // patches at this scale.
         roughness: 0.9,
-        side: THREE.DoubleSide,
       }),
     [],
   )
