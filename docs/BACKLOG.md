@@ -198,3 +198,21 @@ four attempts.
   now unused by any real match now that bots run server-side — see the
   "Bots never propose player trades" closure above. Not deleted this
   session; candidate for removal alongside the `match.spec.ts` cleanup.
+
+## Infra / follow-ups from the mute-toggle task (2026-08-25)
+
+- **Dev-server port collision footgun.** Fixed ports (5173 client, 2567
+  server) mean an agent's E2E run and a human's own `pnpm dev` fight over
+  the same ports (user hit `EADDRINUSE` plus a mid-game server loss on
+  2026-08-25). Consider env-var port overrides (`PORT`; client-side
+  `VITE_SERVER_URL` already exists) so an E2E run and a human playtester can
+  coexist on the same machine. Note `reuseExistingServer: false` (commit
+  `dcd95d8`) already turned the collision loud (a failed launch) instead of
+  silent (an E2E run quietly reusing, and interfering with, someone else's
+  server) — that's progress, but doesn't free up the port itself.
+- **Server-side room-state persistence.** Reconnection today survives a
+  *client* drop (via `allowReconnection` + in-memory `game` state) but not a
+  *server* restart — a deploy or crash mid-match loses every room outright.
+  Colyseus has hooks for this (e.g. persisting `CatanState` on an interval
+  or on `onLeave`/`onDispose`, replaying it in `onCreate`/reconnect); a
+  meaningful future feature, not attempted here.
