@@ -17,9 +17,9 @@ const RESOURCES = ['wood', 'brick', 'sheep', 'wheat', 'ore'] as const
 
 /**
  * Mirrors the server's `pilotIntent` caretaker (mandatory-only choices), but
- * driven from a human seat's redacted view instead of full server state, and
- * with trade offers deliberately ignored — proving the offer window, not a
- * responsive human, is what resolves a bot's open trade.
+ * driven from a human seat's redacted view instead of full server state.
+ * Deliberately never sends `respondTrade`, so any bot offer this seat is
+ * asked to answer goes unanswered — the human is a bystander to trades.
  */
 function humanScriptIntent(view: CatanClientState): CatanClientIntent | null {
   const seat = 0
@@ -129,19 +129,36 @@ describe('CatanRoom with native bots', () => {
 
   it('a bot trade offer resolves within the offer window even if the human never responds', async () => {
     const c = await server.sdk.joinOrCreate('catan', {
-      players: 4, bots: 3, pilotDelayMs: 0, botDelayMs: 0, offerWindowMs: 150, seed: 5, targetVp: 4,
+      players: 4, bots: 3, pilotDelayMs: 0, botDelayMs: 0, offerWindowMs: 150, seed: 6, targetVp: 4,
     })
     const sink: CatanSnapshotPayload[] = []
     c.onMessage(MSG.SNAPSHOT, (p: CatanSnapshotPayload) => sink.push(p))
     c.onMessage('*', () => undefined)
     await settle()
     let sawBotOffer = false
+    // A bot offer can also close because `companionIntent`'s own
+    // `bestConfirmPartner` found an accept/confirmable-counter and the
+    // proposer confirmed on its own — that path never touches the window.
+    // To prove the *window* (not a fast co-bot response) is what closed an
+    // offer, track the last-seen responses map for each open bot offer: a
+    // close with no accept and no counter among those responses (rejects
+    // only, or nobody answered) is unconfirmable by `bestConfirmPartner`, so
+    // it can only have ended via the window's forced `cancelTrade`.
+    let sawWindowResolvedOffer = false
+    let lastBotOfferResponses: NonNullable<CatanClientState['turn']['openTrade']>['responses'] | null = null
     let lastActedSeq = -1
     for (let i = 0; i < 400; i++) {
       const view = sink.at(-1)?.view
       if (!view) break
       if (view.winner !== null) break
-      if (view.turn.openTrade && view.turn.current !== 0) sawBotOffer = true
+      if (view.turn.openTrade && view.turn.current !== 0) {
+        sawBotOffer = true
+        lastBotOfferResponses = view.turn.openTrade.responses
+      } else if (lastBotOfferResponses !== null) {
+        const responses = Object.values(lastBotOfferResponses)
+        if (responses.every((r) => r.kind !== 'accept' && r.kind !== 'counter')) sawWindowResolvedOffer = true
+        lastBotOfferResponses = null
+      }
       // never answer offers: the window must resolve them, without duplicate
       // intents for a snapshot we already acted on
       if (view.seq !== lastActedSeq) {
@@ -155,5 +172,6 @@ describe('CatanRoom with native bots', () => {
     }
     expect(sink.at(-1)!.view.winner).not.toBeNull()
     expect(sawBotOffer).toBe(true)
+    expect(sawWindowResolvedOffer).toBe(true)
   })
 })
