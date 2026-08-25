@@ -1,6 +1,6 @@
 import type { CatanClientIntent } from '@meridian/protocol'
 import {
-  bankTradeRate, RESOURCES,
+  bankTradeRate, hasResources, RESOURCES,
   type CatanClientState, type Resource, type ResourceCount,
 } from '@meridian/rules'
 
@@ -108,6 +108,18 @@ export function shouldAutoDecline(
 /** Pure: should IncomingOffer's banner render? Never while muted — those offers auto-decline silently. */
 export function shouldShowOfferBanner(view: CatanClientState, seat: number, muted: boolean): boolean {
   return !muted && incomingOfferFor(view, seat) !== null
+}
+
+/**
+ * Pure: can this seat actually pay for the incoming offer's `youGive` side
+ * (what accepting would cost)? Gates the Accept button — the engine's
+ * `applyRespondTrade` doesn't reject an unaffordable plain accept itself
+ * (only counters), so an unguarded Accept can post a response that later
+ * bounces at confirm-time with CANT_AFFORD.
+ */
+export function canAcceptOffer(view: CatanClientState, seat: number): boolean {
+  const offer = incomingOfferFor(view, seat)
+  return offer !== null && hasResources(view.you.resources, offer.youGive)
 }
 
 /** Per-opponent response status as the offerer sees it, or null if this seat isn't the offerer. */

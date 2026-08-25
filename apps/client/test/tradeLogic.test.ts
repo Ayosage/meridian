@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createCatanGame, createRng, redactCatanState, type CatanClientState } from '@meridian/rules'
 import {
-  bankRates, bankTradeIntent, counterTradeIntent, decrementSelection, emptySelection,
+  bankRates, bankTradeIntent, canAcceptOffer, counterTradeIntent, decrementSelection, emptySelection,
   incomingOfferFor, incrementSelection, offerResponsesFor, offerTradeIntent,
   selectionToPartial, selectionTotal, shouldAutoDecline, shouldShowOfferBanner,
 } from '../src/scene/catan/tradeLogic'
@@ -174,5 +174,24 @@ describe('mute: offer banner visibility', () => {
   it('is hidden when there is no incoming offer, regardless of mute', () => {
     const view = makeView({ turn: { phase: 'main', openTrade: null } })
     expect(shouldShowOfferBanner(view, 1, false)).toBe(false)
+  })
+})
+
+describe('canAcceptOffer: gates the Accept button on what the responder must pay', () => {
+  const openTrade = { give: { wood: 2 }, get: { ore: 1 }, responses: {} }
+
+  it('true when the responder holds what accepting would cost (offer.get)', () => {
+    const view = makeView({ seat: 1, resources: { ore: 1 }, turn: { current: 0, phase: 'main', openTrade } })
+    expect(canAcceptOffer(view, 1)).toBe(true)
+  })
+
+  it('false when the responder cannot cover offer.get', () => {
+    const view = makeView({ seat: 1, resources: { ore: 0 }, turn: { current: 0, phase: 'main', openTrade } })
+    expect(canAcceptOffer(view, 1)).toBe(false)
+  })
+
+  it('false when there is no incoming offer for this seat', () => {
+    const view = makeView({ turn: { phase: 'main', openTrade: null } })
+    expect(canAcceptOffer(view, 1)).toBe(false)
   })
 })

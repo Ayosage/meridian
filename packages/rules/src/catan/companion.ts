@@ -133,10 +133,16 @@ export function proposalPlan(state: CatanState, seat: PlayerId): { give: Resourc
 }
 
 /**
- * Best confirmable responder to our own open offer, or null. Accepts are
- * always confirmable; counters must pass the pilot floor from the proposer's
- * side (cover counter.get, and counter.give >= counter.get in card count).
- * Ties/choices resolve toward the fewest public VP — don't feed the leader.
+ * Best confirmable responder to our own open offer, or null. Mirrors
+ * applyConfirmTrade's affordability semantics on BOTH sides before treating a
+ * response as confirmable — applyRespondTrade lets a seat accept without
+ * actually holding offer.get (only counters are checked there), so an accept
+ * still needs its own affordability check here, or confirmTrade would bounce
+ * with CANT_AFFORD every time this same partner is re-evaluated: an accept
+ * pays offer.get, a counter's partner pays counter.give. Counters additionally
+ * need the proposer's own side (counter.get) and must pass the pilot floor
+ * (counter.give >= counter.get in card count). Ties/choices resolve toward
+ * the fewest public VP — don't feed the leader.
  */
 export function bestConfirmPartner(state: CatanState, seat: PlayerId): PlayerId | null {
   const offer = state.turn.openTrade
@@ -145,9 +151,17 @@ export function bestConfirmPartner(state: CatanState, seat: PlayerId): PlayerId 
   const ok: PlayerId[] = []
   for (const [k, r] of Object.entries(offer.responses)) {
     const partner = Number(k)
-    if (r.kind === 'accept') ok.push(partner)
-    else if (r.kind === 'counter' && hasResources(hand, r.get) && totalResources(r.give) >= totalResources(r.get))
+    const partnerHand = state.players[partner]!.resources
+    if (r.kind === 'accept') {
+      if (hasResources(partnerHand, offer.get)) ok.push(partner)
+    } else if (
+      r.kind === 'counter' &&
+      hasResources(hand, r.get) &&
+      hasResources(partnerHand, r.give) &&
+      totalResources(r.give) >= totalResources(r.get)
+    ) {
       ok.push(partner)
+    }
   }
   ok.sort((a, b) => publicVp(state, a) - publicVp(state, b))
   return ok[0] ?? null

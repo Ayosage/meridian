@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { RESOURCES, type Resource } from '@meridian/rules'
 import { sendCatanIntent } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
-import { incomingOfferFor, shouldShowOfferBanner } from '../scene/catan/tradeLogic'
+import { canAcceptOffer, incomingOfferFor, shouldShowOfferBanner } from '../scene/catan/tradeLogic'
 import { StepperRow } from './TradePanel'
 import './hud.css'
 
@@ -81,7 +81,15 @@ export function IncomingOffer() {
             </div>
           </div>
           <div className="offer-actions">
-            <button type="button" className="accept-btn" data-testid="offer-accept" onClick={() => respondToOffer('accept', sendCatanIntent)}>Accept</button>
+            <button
+              type="button"
+              className="accept-btn"
+              data-testid="offer-accept"
+              disabled={!canAcceptOffer(view, seat)}
+              onClick={() => respondToOffer('accept', sendCatanIntent)}
+            >
+              Accept
+            </button>
             <button type="button" className="counter-btn" data-testid="offer-counter" onClick={startCounter}>Counter</button>
             <button type="button" className="decline-btn" data-testid="offer-decline" onClick={() => respondToOffer('reject', sendCatanIntent)}>Decline</button>
           </div>

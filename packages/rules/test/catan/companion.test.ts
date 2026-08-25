@@ -224,6 +224,21 @@ describe('companion trade proposals', () => {
     expect(intent).toMatchObject({ type: 'confirmTrade', partner: 1 })
   })
 
+  it('an accept from a responder who cannot actually afford it is not confirmable', () => {
+    let s = exactHand(inMain(), 0, { wheat: 3, ore: 2 })
+    s = { ...s, turn: { ...s.turn, current: 0 } }
+    s = mustApply(s, { type: 'offerTrade', player: 0, give: { wheat: 1 }, get: { ore: 1 } })
+    // seat 1 holds no ore (offer.get) but applyRespondTrade doesn't gate plain
+    // accepts on affordability — the bug this test guards against.
+    s = exactHand(s, 1, {})
+    s = mustApply(s, { type: 'respondTrade', player: 1, response: 'accept' })
+    expect(bestConfirmPartner(s, 0)).toBeNull()
+    // the room's deadline hits with no payable partner: cancel, not confirm
+    // an accept that would bounce with CANT_AFFORD and busy-loop the offer.
+    const forced = companionIntent(s, 0, createRng(0), { ...COMPANION_DEFAULTS, resolveOfferNow: true })!
+    expect(forced.type).toBe('cancelTrade')
+  })
+
   it('waits while responses are pending, cancels on resolveOfferNow', () => {
     let s = exactHand(inMain(), 0, { wheat: 3, ore: 2 })
     s = { ...s, turn: { ...s.turn, current: 0 } }

@@ -366,6 +366,7 @@
 .offer-actions { display: flex; gap: 8px; }
 .offer-actions button { flex: 1; padding: 9px 0; font-size: 13px; font-family: inherit; border-radius: 6px; cursor: pointer; }
 .accept-btn { border: 0; background: #4a8f5c; color: #fff; }
+.accept-btn:disabled { opacity: 0.4; cursor: default; }
 .counter-btn { border: 1px solid rgba(127, 200, 232, 0.35); background: #20222b; color: #e8e8f0; }
 .decline-btn { border: 1px solid rgba(255, 128, 128, 0.4); background: #20222b; color: #ff8080; }
 .response-rows { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(232, 232, 240, 0.08); padding-top: 10px; }
