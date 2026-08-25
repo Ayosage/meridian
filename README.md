@@ -24,7 +24,9 @@ Docs: `docs/BRIEF.md` (pillars) · `docs/superpowers/specs/` (designs) ·
   count, share the join code, host early start), painted-miniature 3D board,
   click-to-build with legality glow, HUD/discard/steal/win UI. E2E
   (3-browser full match + perf snapshot): `pnpm --filter client test:e2e`
-  (requires `playwright install chromium`).
+  (requires `playwright install chromium`, and ports 5173/2567 free — the
+  suite starts its own servers rather than reusing whatever is listening;
+  stop your dev servers first, or `lsof -ti:5173,2567 | xargs kill -9`).
 
 ## Development
 
