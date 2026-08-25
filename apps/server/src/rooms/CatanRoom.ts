@@ -143,7 +143,17 @@ export class CatanRoom extends Room<CatanLobbyState> {
     if (!this.game) return
     const result = applyCatanIntent(this.game, intent, this.rng)
     if (isCatanRuleError(result)) {
-      errorTo?.send(MSG.RULE_ERROR, { code: result.code, message: result.message })
+      if (errorTo) {
+        errorTo.send(MSG.RULE_ERROR, { code: result.code, message: result.message })
+        return
+      }
+      // A driven seat has no client to correct it and nothing pending, so
+      // returning here would freeze the match outright. Re-arm and shout: the
+      // brains are meant to never reach this, so a warn means a real bug.
+      console.warn(
+        `[CatanRoom ${this.roomId}] driven seat ${intent.player} intent ${intent.type} rejected: ${result.code} — ${result.message}`,
+      )
+      this.schedulePilot()
       return
     }
     this.game = result

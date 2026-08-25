@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { boot, type ColyseusTestServer } from '@colyseus/testing'
 import appConfig from '../src/app.config'
 import { MSG, type CatanSnapshotPayload, type CatanClientIntent } from '@meridian/protocol'
@@ -125,6 +125,42 @@ describe('CatanRoom with native bots', () => {
     await settle(400) // bots 1-3 place snake-draft first picks
     const after = sink.at(-1)!.view
     expect(Object.keys(after.buildings).length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('a rejected driven-seat intent re-arms the room instead of freezing the match', async () => {
+    const c = await server.sdk.joinOrCreate('catan', { players: 4, bots: 3, ...FAST, layout: 'beginner' })
+    const sink: CatanSnapshotPayload[] = []
+    c.onMessage(MSG.SNAPSHOT, (p: CatanSnapshotPayload) => sink.push(p))
+    c.onMessage('*', () => undefined)
+    await settle()
+
+    // Poison exactly one *dispatched* driven intent (the probe in
+    // nextDrivenSeat passes its own stub rng, so identity tells them apart) —
+    // the seat still looks driveable, but what it sends is illegal.
+    const room = server.getRoomById(c.roomId) as unknown as {
+      rng: unknown
+      drivenIntent(seat: number, rng: unknown): unknown
+    }
+    const real = room.drivenIntent.bind(room)
+    let poisoned = false
+    room.drivenIntent = (seat, rng) => {
+      if (!poisoned && rng === room.rng) {
+        poisoned = true
+        return { type: 'build', player: seat, piece: 'settlement', location: 'no-such-vertex' }
+      }
+      return real(seat, rng)
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    c.send(MSG.INTENT, { type: 'placeSetupSettlement', vertex: vertexId({ q: 2, r: 0 }, 0) })
+    c.send(MSG.INTENT, { type: 'placeSetupRoad', edge: edgeId({ q: 2, r: 0 }, 0) })
+    await settle(400)
+
+    expect(poisoned).toBe(true) // the bogus intent really was dispatched
+    // the bots carried on: without the re-arm nothing would ever fire again
+    expect(Object.keys(sink.at(-1)!.view.buildings).length).toBeGreaterThanOrEqual(4)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('driven seat'))
+    warn.mockRestore()
   })
 
   it('a bot trade offer resolves within the offer window even if the human never responds', async () => {

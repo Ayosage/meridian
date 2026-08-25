@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { coordKey, vertexId } from '../../src/index'
 import {
   applyCatanIntent, bankTradePlan, bestConfirmPartner, buildGoal, companionIntent, COMPANION_DEFAULTS,
-  createCatanGame, createRng, greedyDiscard, isCatanRuleError, legalRoadEdges, legalSettlementVertices,
-  missingForGoal, pips, proposalPlan, publicVp, RESOURCES, robberHexScore, vertexPips as vp, vertexPips,
+  createCatanGame, createRng, greedyDiscard, isCatanRuleError, legalCityVertices, legalRoadEdges,
+  legalSettlementVertices, missingForGoal, pips, proposalPlan, publicVp, RESOURCES, robberHexScore,
+  standardTopology, vertexPips as vp, vertexPips,
   type CatanState, type DevCard, type ResourceCount,
 } from '../../src/index'
 import { die, inMain, mustApply, setupComplete, stubRng, withResources } from './helpers'
@@ -280,5 +281,46 @@ describe('companion liveness', () => {
       }
       expect(state.winner, `seed ${seed} never finished`).not.toBeNull()
     }
+  })
+})
+
+/**
+ * A driven seat has no client to correct it: an intent naming a location the
+ * engine rejects strands that seat (see CatanRoom.applyAndBroadcast). So every
+ * branch here must decline outright rather than emit a null/undefined location.
+ */
+describe('companion malformed-intent guards', () => {
+  it('main: a build tier with no legal candidate falls through instead of naming none', () => {
+    // affords a city, owns no settlement to upgrade — legalCityVertices is empty
+    const base = withResources(inMain(), 0, { wheat: 2, ore: 3 })
+    const buildings = Object.fromEntries(
+      Object.entries(base.buildings).map(([v, b]) => [v, b.owner === 0 ? { ...b, kind: 'city' as const } : b]),
+    )
+    const state = { ...base, buildings }
+    expect(legalCityVertices(state, 0)).toEqual([])
+    const intent = companionIntent(state, 0, createRng(0))!
+    expect(intent).not.toMatchObject({ piece: 'city' })
+    expect(intent).not.toHaveProperty('location', undefined)
+  })
+
+  it('setup: no legal opening vertex yields null, not an undefined vertex', () => {
+    const fresh = createCatanGame({ playerCount: 4, layout: 'beginner' }, createRng(7))
+    const buildings = Object.fromEntries(
+      standardTopology().vertices.map((v) => [v, { owner: 1, kind: 'settlement' as const }]),
+    )
+    const blocked = { ...fresh, buildings }
+    expect(legalSettlementVertices(blocked, 0, { setup: true })).toEqual([])
+    expect(companionIntent(blocked, blocked.turn.current, createRng(0))).toBeNull()
+  })
+
+  it('setup: no free edge at the new settlement yields null, not an undefined edge', () => {
+    const fresh = createCatanGame({ playerCount: 4, layout: 'beginner' }, createRng(7))
+    const seat = fresh.turn.current
+    const vertex = legalSettlementVertices(fresh, seat, { setup: true })[0]!
+    const placed = mustApply(fresh, { type: 'placeSetupSettlement', player: seat, vertex })
+    expect(placed.turn.setup!.expect).toBe('road')
+    const roads = { ...placed.roads }
+    for (const e of standardTopology().vertexEdges[vertex] ?? []) roads[e] = 3 // every exit taken
+    expect(companionIntent({ ...placed, roads }, seat, createRng(0))).toBeNull()
   })
 })

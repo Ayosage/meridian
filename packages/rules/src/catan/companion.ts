@@ -202,14 +202,21 @@ export function companionIntent(
 
   switch (t.phase) {
     case 'setup': {
-      if (t.setup!.expect === 'settlement') {
-        const spots = legalSettlementVertices(state, seat, { setup: true })
-        return { type: 'placeSetupSettlement', player: seat, vertex: bestVertex(state, spots)! }
+      // Every exit below carries a real location or is null: an intent naming a
+      // vertex/edge the engine rejects would strand the seat (the room has no
+      // recovery for a driven seat whose intent bounces).
+      const setup = t.setup
+      if (!setup) return null
+      if (setup.expect === 'settlement') {
+        const spot = bestVertex(state, legalSettlementVertices(state, seat, { setup: true }))
+        return spot ? { type: 'placeSetupSettlement', player: seat, vertex: spot } : null
       }
-      const topo = standardTopology()
-      const settlement = t.setup!.lastSettlement!
-      const edge = (topo.vertexEdges[settlement] ?? []).find((e) => state.roads[e] === undefined)!
-      return { type: 'placeSetupRoad', player: seat, edge }
+      const settlement = setup.lastSettlement
+      if (!settlement) return null
+      // the engine requires the opening road to touch that settlement, so its
+      // free edges are the whole candidate set — no wider fallback exists
+      const edge = (standardTopology().vertexEdges[settlement] ?? []).find((e) => state.roads[e] === undefined)
+      return edge ? { type: 'placeSetupRoad', player: seat, edge } : null
     }
     case 'preRoll':
       return { type: 'rollDice', player: seat }
@@ -223,7 +230,8 @@ export function companionIntent(
         if (s > bestScore) { bestKey = key; bestScore = s }
       }
       const topo = standardTopology()
-      const hex = state.board.hexes.find((h) => coordKey(h.coord) === bestKey)!
+      const hex = state.board.hexes.find((h) => coordKey(h.coord) === bestKey)
+      if (!hex) return null
       const victims = state.players
         .map((_, i) => i)
         .filter((i) =>
@@ -253,14 +261,16 @@ function mainPhase(state: CatanState, seat: PlayerId, opts: CompanionOpts): Cata
     return null // keep waiting; the room owns the clock
   }
 
+  // each build tier falls through when it has no legal candidate, exactly as
+  // it does when unaffordable — never down into the intent with a null location
   const can = affordable(state, seat)
   if (can.city && me.citiesLeft > 0) {
-    const spots = legalCityVertices(state, seat)
-    if (spots.length) return { type: 'build', player: seat, piece: 'city', location: bestVertex(state, spots)! }
+    const spot = bestVertex(state, legalCityVertices(state, seat))
+    if (spot) return { type: 'build', player: seat, piece: 'city', location: spot }
   }
   if (can.settlement && me.settlementsLeft > 0) {
-    const spots = legalSettlementVertices(state, seat)
-    if (spots.length) return { type: 'build', player: seat, piece: 'settlement', location: bestVertex(state, spots)! }
+    const spot = bestVertex(state, legalSettlementVertices(state, seat))
+    if (spot) return { type: 'build', player: seat, piece: 'settlement', location: spot }
   }
   if (can.devCard && state.devDeck.length > 0) return { type: 'buyDevCard', player: seat }
 
@@ -284,8 +294,8 @@ function mainPhase(state: CatanState, seat: PlayerId, opts: CompanionOpts): Cata
   }
 
   if (can.road && me.roadsLeft > 0) {
-    const spots = legalRoadEdges(state, seat)
-    if (spots.length) return { type: 'build', player: seat, piece: 'road', location: spots[0]! }
+    const spot = legalRoadEdges(state, seat)[0]
+    if (spot) return { type: 'build', player: seat, piece: 'road', location: spot }
   }
 
   if (!opts.proposedThisTurn) {
