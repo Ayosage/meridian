@@ -1,16 +1,11 @@
 import { expect, test } from '@playwright/test'
 
-// window.__meridianDebug typing lives in src/dev/debugHooks.tsx /
-// scene/catan/CatanScene.tsx's CatanDebugHooks — see bots.spec.ts's header
-// comment for why this isn't imported from @meridian/rules.
-declare global {
-  interface Window {
-    __meridianDebug?: {
-      legalTargetsOnScreen: () => { mode: string; targets: { kind: string; id: string; x: number; y: number }[] }
-      catanView: () => { view: { buildings: Readonly<Record<string, unknown>> } }
-    }
-  }
-}
+// Global `window.__meridianDebug` typing (legalTargetsOnScreen, catanView)
+// lives in src/dev/debugHooks.tsx / scene/catan/CatanScene.tsx's
+// CatanDebugHooks — see bots.spec.ts's header comment. `catanView()` types
+// its `view` as `unknown` (the hook is shared with non-Catan routes), so the
+// reads below cast it locally to just the shape they use.
+type ViewShape = { buildings: Readonly<Record<string, unknown>> }
 
 type Page = import('@playwright/test').Page
 type ScreenTarget = { kind: string; id: string; x: number; y: number }
@@ -37,7 +32,7 @@ async function waitForCameraSettle(page: Page, id: string): Promise<ScreenTarget
   let prev: ScreenTarget | null = null
   let targets: ScreenTarget[] = []
   for (let i = 0; i < 30; i++) {
-    targets = await page.evaluate(() => window.__meridianDebug!.legalTargetsOnScreen().targets)
+    targets = await page.evaluate(() => window.__meridianDebug!.legalTargetsOnScreen!().targets)
     const t = targets.find((x) => x.id === id) ?? null
     if (t && prev && Math.abs(t.x - prev.x) < 0.5 && Math.abs(t.y - prev.y) < 0.5) return targets
     prev = t
@@ -57,7 +52,7 @@ test('a vertex under a HUD panel becomes clickable after a drag-orbit', async ({
   // TradePanel, DevCardStrip) render as fixed-position elements over the
   // canvas — no toggling needed to manufacture occlusion during initial
   // setup placement.
-  const targets = await page.evaluate(() => window.__meridianDebug!.legalTargetsOnScreen().targets)
+  const targets = await page.evaluate(() => window.__meridianDebug!.legalTargetsOnScreen!().targets)
   let occluded: ScreenTarget | null = null
   for (const t of targets) {
     if ((await hitTest(page, t.x, t.y)) !== 'canvas') {
@@ -97,10 +92,12 @@ test('a vertex under a HUD panel becomes clickable after a drag-orbit', async ({
   // The previously occluded vertex is now clear — click it and see the building land.
   const moved = after.find((t) => t.id === occluded!.id)!
   expect(await hitTest(page, moved.x, moved.y)).toBe('canvas')
-  const before = await page.evaluate(() => Object.keys(window.__meridianDebug!.catanView().view.buildings).length)
+  const before = await page.evaluate(
+    () => Object.keys((window.__meridianDebug!.catanView!() as { view: ViewShape }).view.buildings).length,
+  )
   await page.mouse.click(moved.x, moved.y)
   await page.waitForFunction(
-    (n) => Object.keys(window.__meridianDebug!.catanView().view.buildings).length > n,
+    (n) => Object.keys((window.__meridianDebug!.catanView!() as { view: ViewShape }).view.buildings).length > n,
     before,
   )
 })
