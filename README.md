@@ -40,7 +40,8 @@ the 4-letter code; friends Join with it in their own browsers. The match
 starts when every seat fills (or the host starts early; empty seats get the
 caretaker pilot). Short on friends? Companion bots can take the empty seats:
 `cd apps/client && node tools/bots.mjs <CODE> [count]` (default 2 bots; they
-play a competent greedy game through the real UI). Dev extras: `/board`
+play a competent greedy game through the real UI). Solo play: pick a bot
+count in the lobby (native bots; no script needed). Dev extras: `/board`
 renders a full board without a server; `?tier=low` drops the
 ambient-occlusion pass on weak GPUs.
 

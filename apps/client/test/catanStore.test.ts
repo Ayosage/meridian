@@ -204,4 +204,12 @@ describe('useCatanStore', () => {
     expect(s.mode).toEqual(IDLE)
     expect(s.status).toBe('idle')
   })
+
+  it('setLobby carries botCount; reset clears it', () => {
+    const s = useCatanStore.getState()
+    s.setLobby(['a'], [true], 4, 3)
+    expect(useCatanStore.getState().botCount).toBe(3)
+    useCatanStore.getState().reset()
+    expect(useCatanStore.getState().botCount).toBe(0)
+  })
 })

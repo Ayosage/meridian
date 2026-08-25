@@ -21,6 +21,7 @@ interface CatanLobbyClientState {
   targetPlayers: number
   seats: Iterable<string> & { indexOf(sessionId: string): number; length: number }
   connected: Iterable<boolean> & { length: number }
+  botCount: number
 }
 
 let client: Client | null = null
@@ -47,12 +48,14 @@ function numberParam(name: string): number | undefined {
   return Number.isFinite(value) ? value : undefined
 }
 
-export async function createCatanMatch(players: 3 | 4): Promise<void> {
+export async function createCatanMatch(players: 3 | 4, bots: number): Promise<void> {
   useCatanStore.getState().setStatus('connecting')
   const seed = numberParam('seed')
   const targetVp = numberParam('vp')
+  const botsOverride = numberParam('bots') // E2E hook, same idiom as ?seed=/?vp=
   const options = {
     players,
+    bots: botsOverride ?? bots,
     ...(seed !== undefined ? { seed } : {}),
     ...(targetVp !== undefined ? { targetVp } : {}),
   }
@@ -104,7 +107,7 @@ function enterRoom(r: Room<CatanLobbyClientState>): void {
   r.onStateChange((state) => {
     const seat = state.seats.indexOf(r.sessionId)
     if (seat !== -1 && store().seat !== seat) store().setSeat(seat)
-    store().setLobby(Array.from(state.seats), Array.from(state.connected), state.targetPlayers)
+    store().setLobby(Array.from(state.seats), Array.from(state.connected), state.targetPlayers, state.botCount ?? 0)
     if (state.phase === 'waiting') store().setStatus('waiting')
   })
 

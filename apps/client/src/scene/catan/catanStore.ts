@@ -232,6 +232,8 @@ interface CatanState {
   seats: string[]
   connected: boolean[]
   targetPlayers: number | null
+  /** Reserved bot seats (server appends bot players at match start; empty during 'waiting'). */
+  botCount: number
 
   /** TradePanel: open/closed, and which tab (player offer vs. bank) is active. */
   tradeOpen: boolean
@@ -253,7 +255,7 @@ interface CatanState {
   setStatus(status: CatanStatus): void
   setJoined(roomId: string): void
   setSeat(seat: number): void
-  setLobby(seats: string[], connected: boolean[], targetPlayers: number): void
+  setLobby(seats: string[], connected: boolean[], targetPlayers: number, botCount: number): void
   ingestSnapshot(payload: CatanSnapshotPayload): void
   setMode(mode: Mode): void
   setToast(message: string | null): void
@@ -346,6 +348,7 @@ const INITIAL = {
   seats: [] as string[],
   connected: [] as boolean[],
   targetPlayers: null as number | null,
+  botCount: 0,
   tradeOpen: false,
   tradeTab: 'players' as const,
   tradeGive: emptySelection(),
@@ -363,7 +366,7 @@ export const useCatanStore = create<CatanState>((set, get) => ({
   setStatus: (status) => set({ status }),
   setJoined: (roomId) => set({ roomId, status: 'waiting' }),
   setSeat: (seat) => set({ seat }),
-  setLobby: (seats, connected, targetPlayers) => set({ seats, connected, targetPlayers }),
+  setLobby: (seats, connected, targetPlayers, botCount) => set({ seats, connected, targetPlayers, botCount }),
 
   ingestSnapshot: (payload) => {
     const { view, seat, mode, discardSelection } = get()
