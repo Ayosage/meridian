@@ -10,11 +10,16 @@ const SliceReview = lazy(() =>
 const BoardPreview = lazy(() =>
   import('./dev/board/BoardPreview').then((m) => ({ default: m.BoardPreview })),
 )
+// dev-only dice review route (every face + tumble, no server)
+const DicePreview = lazy(() =>
+  import('./dev/dice/DicePreview').then((m) => ({ default: m.DicePreview })),
+)
 
 const root = document.getElementById('root')
 if (!root) throw new Error('missing #root element')
 const isSlice = import.meta.env.DEV && window.location.pathname === '/slice'
 const isBoard = import.meta.env.DEV && window.location.pathname === '/board'
+const isDice = import.meta.env.DEV && window.location.pathname === '/dice'
 createRoot(root).render(
   isSlice ? (
     <Suspense fallback={null}>
@@ -23,6 +28,10 @@ createRoot(root).render(
   ) : isBoard ? (
     <Suspense fallback={null}>
       <BoardPreview />
+    </Suspense>
+  ) : isDice ? (
+    <Suspense fallback={null}>
+      <DicePreview />
     </Suspense>
   ) : (
     <App />

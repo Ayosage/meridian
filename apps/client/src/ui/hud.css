@@ -212,9 +212,12 @@
   top: 56px;
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
   background: rgba(12, 14, 20, 0.8);
-  padding: 6px 14px;
+  padding: 4px 14px;
   border-radius: 8px;
   font-variant-numeric: tabular-nums;
 }

@@ -5,6 +5,7 @@ import { useCatanStore } from '../scene/catan/catanStore'
 import { playerCards } from '../scene/catan/hudLogic'
 import { seatColor } from '../scene/catan/palette'
 import { ActionLog } from './ActionLog'
+import { DiceCanvas } from './DiceCanvas'
 import { ResourceIcon } from './ResourceIcon'
 // Only App.tsx imports hud.css today; this also mounts standalone wherever
 // CatanHud is used, so it owns its own stylesheet dependency rather than
@@ -33,7 +34,10 @@ function TurnBanner({ view, seat, connected }: { view: CatanClientState; seat: n
 function DiceDisplay({ dice }: { dice: readonly [number, number] | null }) {
   return (
     <div className="dice-display">
-      {dice ? `⚅ ${dice[0]} + ${dice[1]} = ${dice[0] + dice[1]}` : '⚅ —'}
+      <DiceCanvas dice={dice} />
+      <span className="dice-total" data-testid="dice-total">
+        {dice ? `${dice[0]} + ${dice[1]} = ${dice[0] + dice[1]}` : '—'}
+      </span>
     </div>
   )
 }

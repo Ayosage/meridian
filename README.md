@@ -43,8 +43,8 @@ starts when every seat fills (or the host starts early; empty seats get the
 caretaker pilot). Short on friends? Pick a bot count in the lobby — native
 server-side bots fill the empty seats and play a competent greedy game (works
 for solo play too; no script needed). Dev extras: `/board`
-renders a full board without a server; `?tier=low` drops the
-ambient-occlusion pass on weak GPUs.
+renders a full board without a server; `/dice` cycles the HUD dice through
+every face; `?tier=low` drops the ambient-occlusion pass on weak GPUs.
 
 The server owns all game state: clients send intents, receive per-seat
 redacted snapshots.
