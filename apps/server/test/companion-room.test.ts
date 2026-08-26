@@ -169,9 +169,12 @@ describe('CatanRoom with native bots', () => {
     warn.mockRestore()
   })
 
+  // Seed 7 pinned 2026-08-26 (was 6): the frontier-aware setup placement
+  // changed seeded trajectories; both window tests need a game where a bot
+  // offer actually idles out. Re-pin again if placement scoring changes.
   it('a bot trade offer resolves within the offer window even if the human never responds', async () => {
     const c = await server.sdk.joinOrCreate('catan', {
-      players: 4, bots: 3, pilotDelayMs: 0, botDelayMs: 0, offerWindowMs: 150, seed: 6, targetVp: 4,
+      players: 4, bots: 3, pilotDelayMs: 0, botDelayMs: 0, offerWindowMs: 150, seed: 7, targetVp: 4,
     })
     const sink: CatanSnapshotPayload[] = []
     c.onMessage(MSG.SNAPSHOT, (p: CatanSnapshotPayload) => sink.push(p))
@@ -222,7 +225,7 @@ describe('CatanRoom with native bots', () => {
     // window even once nobody is left to answer, the close lands ~5s after the
     // last response instead of one bot delay after it.
     const c = await server.sdk.joinOrCreate('catan', {
-      players: 4, bots: 3, pilotDelayMs: 0, botDelayMs: 20, offerWindowMs: 5_000, seed: 6, targetVp: 4,
+      players: 4, bots: 3, pilotDelayMs: 0, botDelayMs: 20, offerWindowMs: 5_000, seed: 7, targetVp: 4,
     })
     const sink: CatanSnapshotPayload[] = []
     c.onMessage(MSG.SNAPSHOT, (p: CatanSnapshotPayload) => sink.push(p))

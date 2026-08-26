@@ -2,10 +2,11 @@ import { coordKey } from '../coord'
 import type { PlayerId } from '../state'
 import { COSTS } from './data'
 import type { CatanIntent } from './intent'
+import { settlementDistanceOk } from './placement'
 import { legalCityVertices, legalRoadEdges, legalSettlementVertices, affordable } from './queries'
 import type { Rng } from './rng'
 import type { CatanState } from './state'
-import { standardTopology, type VertexId } from './topology'
+import { standardTopology, type EdgeId, type VertexId } from './topology'
 import { hasResources, RESOURCES, totalResources, type Resource, type ResourceCount } from './types'
 
 /**
@@ -193,6 +194,75 @@ export function vertexDiversity(state: Pick<CatanState, 'board'>, vertex: Vertex
   return kinds.size
 }
 
+/**
+ * Best pips among vertices exactly two steps away that are placeable and stay
+ * placeable after building here (direct neighbors get sterilized by the
+ * distance rule, so real expansion targets live at distance 2). The room a
+ * setup placement buys — and the reason bots stop stacking one hot region:
+ * once a region's frontier is taken, its remaining corners stop scoring.
+ */
+export function frontierPips(state: Pick<CatanState, 'board' | 'buildings'>, vertex: VertexId): number {
+  const topo = standardTopology()
+  const ring1 = topo.vertexVertices[vertex] ?? []
+  const seen = new Set<VertexId>([vertex, ...ring1])
+  let best = 0
+  for (const n of ring1) {
+    for (const u of topo.vertexVertices[n] ?? []) {
+      if (seen.has(u)) continue
+      seen.add(u)
+      if (!settlementDistanceOk(state, u)) continue
+      const p = vertexPips(state, u)
+      if (p > best) best = p
+    }
+  }
+  return best
+}
+
+/** Immediate yield dominates; a pip of yield is only sacrificed for 3+ pips of frontier. */
+const SETUP_PIP_WEIGHT = 3
+
+/** Setup placement: pips now, weighted, plus the best expansion vertex this spot keeps reachable. */
+export function bestSetupVertex(
+  state: Pick<CatanState, 'board' | 'buildings'>,
+  candidates: readonly VertexId[],
+): VertexId | null {
+  let best: VertexId | null = null
+  let bestScore = -1
+  let bestDiversity = -1
+  for (const v of candidates) {
+    const s = vertexPips(state, v) * SETUP_PIP_WEIGHT + frontierPips(state, v)
+    const d = vertexDiversity(state, v)
+    if (s > bestScore || (s === bestScore && d > bestDiversity)) { best = v; bestScore = s; bestDiversity = d }
+  }
+  return best
+}
+
+/**
+ * Opening road: of the settlement's free edges, head toward the endpoint
+ * whose onward vertices offer the most pips — the expansion plan the
+ * placement was scored for, instead of an arbitrary free edge.
+ */
+export function bestSetupRoadEdge(
+  state: Pick<CatanState, 'board' | 'buildings' | 'roads'>,
+  settlement: VertexId,
+): EdgeId | null {
+  const topo = standardTopology()
+  let best: EdgeId | null = null
+  let bestScore = -1
+  for (const e of topo.vertexEdges[settlement] ?? []) {
+    if (state.roads[e] !== undefined) continue
+    const far = topo.edgeVertices[e]!.find((v) => v !== settlement)!
+    let score = 0
+    for (const u of topo.vertexVertices[far] ?? []) {
+      if (u === settlement || !settlementDistanceOk(state, u)) continue
+      const p = vertexPips(state, u)
+      if (p > score) score = p
+    }
+    if (score > bestScore) { best = e; bestScore = score }
+  }
+  return best
+}
+
 /** Highest-pip vertex from a candidate list; pip ties break toward resource diversity, then first-wins (stable, deterministic). */
 export function bestVertex(state: Pick<CatanState, 'board'>, candidates: readonly VertexId[]): VertexId | null {
   let best: VertexId | null = null
@@ -249,14 +319,14 @@ export function companionIntent(
       const setup = t.setup
       if (!setup) return null
       if (setup.expect === 'settlement') {
-        const spot = bestVertex(state, legalSettlementVertices(state, seat, { setup: true }))
+        const spot = bestSetupVertex(state, legalSettlementVertices(state, seat, { setup: true }))
         return spot ? { type: 'placeSetupSettlement', player: seat, vertex: spot } : null
       }
       const settlement = setup.lastSettlement
       if (!settlement) return null
       // the engine requires the opening road to touch that settlement, so its
-      // free edges are the whole candidate set — no wider fallback exists
-      const edge = (standardTopology().vertexEdges[settlement] ?? []).find((e) => state.roads[e] === undefined)
+      // free edges are the whole candidate set — aim at the richest frontier
+      const edge = bestSetupRoadEdge(state, settlement)
       return edge ? { type: 'placeSetupRoad', player: seat, edge } : null
     }
     case 'preRoll':

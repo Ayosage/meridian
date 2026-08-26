@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { coordKey, vertexId } from '../../src/index'
 import {
-  applyCatanIntent, bankTradePlan, bestConfirmPartner, bestVertex, buildGoal, companionIntent,
-  COMPANION_DEFAULTS, createCatanGame, createRng, greedyDiscard, isCatanRuleError, legalCityVertices,
+  applyCatanIntent, bankTradePlan, bestConfirmPartner, bestSetupRoadEdge, bestSetupVertex, bestVertex,
+  buildGoal, companionIntent,
+  COMPANION_DEFAULTS, createCatanGame, createRng, frontierPips, greedyDiscard, isCatanRuleError,
+  legalCityVertices,
   legalRoadEdges, legalSettlementVertices, missingForGoal, pips, proposalPlan, publicVp, RESOURCES,
   robberHexScore, standardTopology, vertexDiversity, vertexPips as vp, vertexPips,
   type CatanState, type DevCard, type HexTile, type ResourceCount,
@@ -291,6 +293,82 @@ describe('companion placement tiebreaks', () => {
     expect(vertexDiversity(state, mono)).toBe(1)
     expect(vertexDiversity(state, diverse)).toBe(2)
     expect(vertexPips(state, mono)).toBe(vertexPips(state, diverse)) // the tie the next test relies on
+  })
+
+  it('frontierPips: best pips exactly two steps out, honoring the distance rule', () => {
+    // A lone 8-hex: from corner 0, corners 2 and 4 are the on-board frontier (5 pips each);
+    // corner 1/5 are direct neighbors (sterilized by the placement) and never count.
+    const hexes: HexTile[] = [{ coord: { q: 0, r: 0 }, terrain: 'fields', token: 8 }]
+    const board = { hexes, ports: [], robber: 'off' }
+    const v = vertexId({ q: 0, r: 0 }, 0)
+    expect(frontierPips({ board, buildings: {} }, v)).toBe(5)
+    // occupying both on-hex frontier corners leaves only off-board frontier: 0
+    const occupied = {
+      [vertexId({ q: 0, r: 0 }, 2)]: { owner: 1, kind: 'settlement' as const },
+      [vertexId({ q: 0, r: 0 }, 4)]: { owner: 2, kind: 'settlement' as const },
+    }
+    expect(frontierPips({ board, buildings: occupied }, v)).toBe(0)
+    // a building ADJACENT to both frontier corners kills them via the distance rule too
+    const adjacent = { [vertexId({ q: 0, r: 0 }, 3)]: { owner: 1, kind: 'settlement' as const } }
+    expect(frontierPips({ board, buildings: adjacent }, v)).toBe(0)
+  })
+
+  it('bestSetupVertex trades a pip of yield for real expansion room; bestVertex would not', () => {
+    // Lone 6-hex D: any corner = 5 pips now, 5-pip frontier -> setup score 20.
+    // E(9) adjacent to F(6): an E-only corner two steps from the 9-pip shared
+    // corner = 4 pips now, 9-pip frontier -> setup score 21. Greedy pips alone
+    // prefers D's corner; setup scoring gives up the pip for the frontier.
+    const hexes: HexTile[] = [
+      { coord: { q: 2, r: -2 }, terrain: 'fields', token: 6 },
+      { coord: { q: -1, r: 0 }, terrain: 'pasture', token: 9 },
+      { coord: { q: -2, r: 1 }, terrain: 'forest', token: 6 },
+    ]
+    const state = { board: { hexes, ports: [], robber: 'off' }, buildings: {} }
+    const topo = standardTopology()
+    const vA = vertexId({ q: 2, r: -2 }, 0)
+    expect(vertexPips(state, vA)).toBe(5)
+    // an E-only corner whose frontier reaches a 9-pip shared corner
+    const vB = (topo.hexVertices['-1,0'] ?? []).find(
+      (u) => vertexPips(state, u) === 4 && frontierPips(state, u) === 9,
+    )!
+    expect(vB).toBeDefined()
+    expect(bestVertex(state, [vA, vB])).toBe(vA)
+    expect(bestSetupVertex(state, [vA, vB])).toBe(vB)
+  })
+
+  it('bestSetupRoadEdge heads toward the richest onward frontier', () => {
+    // Settlement on a corner of A(8); a 6-hex Z sits two hexes away on one
+    // side. The opening road must take the edge whose far endpoint can reach
+    // Z-touching vertices, not an arbitrary free edge.
+    const hexes: HexTile[] = [
+      { coord: { q: 0, r: 0 }, terrain: 'fields', token: 8 },
+      { coord: { q: 1, r: -2 }, terrain: 'forest', token: 6 },
+    ]
+    const state = { board: { hexes, ports: [], robber: 'off' }, buildings: {}, roads: {} }
+    const topo = standardTopology()
+    // pick the A-corner with the widest spread of onward scores among its edges
+    let settlement = ''
+    let spread = -1
+    for (const v of topo.hexVertices['0,0'] ?? []) {
+      const scores = (topo.vertexEdges[v] ?? []).map((e) => {
+        const n = topo.edgeVertices[e]!.find((x) => x !== v)!
+        return Math.max(0, ...(topo.vertexVertices[n] ?? []).filter((u) => u !== v).map((u) => vertexPips(state, u)))
+      })
+      const s = Math.max(...scores) - Math.min(...scores)
+      if (s > spread) { spread = s; settlement = v }
+    }
+    expect(spread).toBeGreaterThan(0) // the board really discriminates directions
+    const chosen = bestSetupRoadEdge(state, settlement)!
+    const far = topo.edgeVertices[chosen]!.find((x) => x !== settlement)!
+    const onward = Math.max(
+      0,
+      ...(topo.vertexVertices[far] ?? []).filter((u) => u !== settlement).map((u) => vertexPips(state, u)),
+    )
+    for (const e of topo.vertexEdges[settlement] ?? []) {
+      const n = topo.edgeVertices[e]!.find((x) => x !== settlement)!
+      const s = Math.max(0, ...(topo.vertexVertices[n] ?? []).filter((u) => u !== settlement).map((u) => vertexPips(state, u)))
+      expect(onward).toBeGreaterThanOrEqual(s)
+    }
   })
 
   it('bestVertex breaks pip ties toward resource diversity, not list order', () => {
