@@ -58,10 +58,10 @@ function TintedPiece({
   return <primitive object={clone} position={position} rotation={rotation} scale={scale} />
 }
 
-function Buildings({ buildings }: { buildings: CatanClientState['buildings'] }) {
+function Buildings({ buildings, hexes }: { buildings: CatanClientState['buildings']; hexes: CatanBoard['hexes'] }) {
   const settlementSrc = useSliceGltf('settlement')
   const citySrc = useSliceGltf('city')
-  const vw = vertexWorld()
+  const vw = vertexWorld(hexes)
   return (
     <>
       {Object.entries(buildings).map(([id, building]) => {
@@ -83,9 +83,9 @@ function Buildings({ buildings }: { buildings: CatanClientState['buildings'] }) 
   )
 }
 
-function Roads({ roads }: { roads: CatanClientState['roads'] }) {
+function Roads({ roads, hexes }: { roads: CatanClientState['roads']; hexes: CatanBoard['hexes'] }) {
   const roadSrc = useSliceGltf('road')
-  const ew = edgeWorld()
+  const ew = edgeWorld(hexes)
   return (
     <>
       {Object.entries(roads).map(([id, owner]) => {
@@ -130,7 +130,7 @@ function seededAngleJitter(key: string, maxRadians: number): number {
  */
 function Ports({ board }: { board: CatanBoard }) {
   const portSrc = useSliceGltf('port')
-  const vw = vertexWorld()
+  const vw = vertexWorld(board.hexes)
   // Every snapshot re-mints `board` (each robber move included) while its
   // ports never change mid-match, and vw is module-cached — so key the memos
   // on a content-stable ports reference, not on board identity, or the boats
@@ -188,8 +188,8 @@ function Ports({ board }: { board: CatanBoard }) {
 export function Pieces({ view }: { view: CatanClientState }) {
   return (
     <>
-      <Buildings buildings={view.buildings} />
-      <Roads roads={view.roads} />
+      <Buildings buildings={view.buildings} hexes={view.board.hexes} />
+      <Roads roads={view.roads} hexes={view.board.hexes} />
       <Ports board={view.board} />
     </>
   )

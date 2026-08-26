@@ -1,7 +1,6 @@
 import {
   add,
   DIRECTIONS,
-  spiralCoords,
   vertexId,
   edgeId,
   type CatanBoard,
@@ -24,14 +23,17 @@ function centroid3(a: [number, number, number], b: typeof a, c: typeof a): [numb
   return [(a[0] + b[0] + c[0]) / 3, TILE_TOP, (a[2] + b[2] + c[2]) / 3]
 }
 
-let vw: Map<VertexId, [number, number, number]> | null = null
-let ew: Map<EdgeId, { pos: [number, number, number]; angle: number }> | null = null
+// Caches keyed by hex count — radius-2 and radius-3 boards can coexist across
+// matches in one session, and every same-size board shares identical geometry.
+const vwBySize = new Map<number, Map<VertexId, [number, number, number]>>()
+const ewBySize = new Map<number, Map<EdgeId, { pos: [number, number, number]; angle: number }>>()
 
 /** World position of every board vertex (corner = centroid of the 3 meeting hex centers). */
-export function vertexWorld(): ReadonlyMap<VertexId, [number, number, number]> {
-  if (vw) return vw
-  vw = new Map()
-  for (const hex of spiralCoords()) {
+export function vertexWorld(hexes: CatanBoard['hexes']): ReadonlyMap<VertexId, [number, number, number]> {
+  const cached = vwBySize.get(hexes.length)
+  if (cached) return cached
+  const vw = new Map<VertexId, [number, number, number]>()
+  for (const { coord: hex } of hexes) {
     for (let c = 0; c < 6; c++) {
       const id = vertexId(hex, c)
       if (vw.has(id)) continue
@@ -45,14 +47,16 @@ export function vertexWorld(): ReadonlyMap<VertexId, [number, number, number]> {
       )
     }
   }
+  vwBySize.set(hexes.length, vw)
   return vw
 }
 
 /** World midpoint + Y-rotation for every board edge (a +X-modeled road aligns via angle). */
-export function edgeWorld(): ReadonlyMap<EdgeId, { pos: [number, number, number]; angle: number }> {
-  if (ew) return ew
-  ew = new Map()
-  for (const hex of spiralCoords()) {
+export function edgeWorld(hexes: CatanBoard['hexes']): ReadonlyMap<EdgeId, { pos: [number, number, number]; angle: number }> {
+  const cached = ewBySize.get(hexes.length)
+  if (cached) return cached
+  const ew = new Map<EdgeId, { pos: [number, number, number]; angle: number }>()
+  for (const { coord: hex } of hexes) {
     for (let d = 0; d < 6; d++) {
       const id = edgeId(hex, d)
       if (ew.has(id)) continue
@@ -65,6 +69,7 @@ export function edgeWorld(): ReadonlyMap<EdgeId, { pos: [number, number, number]
       ew.set(id, { pos: [(a[0] + b[0]) / 2, TILE_TOP, (a[2] + b[2]) / 2], angle })
     }
   }
+  ewBySize.set(hexes.length, ew)
   return ew
 }
 

@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { standardTopology, vertexId, edgeId, createCatanGame, createRng } from '@meridian/rules'
+import { generateBoard, standardTopology, topologyFor, vertexId, edgeId, createCatanGame, createRng } from '@meridian/rules'
 import { vertexWorld, edgeWorld, portWorld, portsEqual, TILE_TOP } from '../src/scene/catan/catanLayout'
 import { coordToWorld } from '../src/scene/layout'
+
+const R2_HEXES = createCatanGame({ playerCount: 4, layout: 'beginner' }, createRng(1)).board.hexes
 
 describe('catanLayout', () => {
   it('covers every topology vertex and edge exactly once', () => {
     const topo = standardTopology()
-    const vw = vertexWorld()
-    const ew = edgeWorld()
+    const vw = vertexWorld(R2_HEXES)
+    const ew = edgeWorld(R2_HEXES)
     expect(vw.size).toBe(topo.vertices.length) // 54
     expect(ew.size).toBe(topo.edges.length) // 72
     for (const v of topo.vertices) expect(vw.get(v)).toBeDefined()
@@ -15,7 +17,7 @@ describe('catanLayout', () => {
   })
 
   it('a corner is equidistant (= circumradius 1) from its owning hex center', () => {
-    const vw = vertexWorld()
+    const vw = vertexWorld(R2_HEXES)
     const [cx, , cz] = coordToWorld({ q: 0, r: 0 })
     const corner = vw.get(vertexId({ q: 0, r: 0 }, 2))!
     const d = Math.hypot(corner[0] - cx, corner[2] - cz)
@@ -23,7 +25,7 @@ describe('catanLayout', () => {
   })
 
   it('an edge midpoint sits halfway between the two hex centers, angle perpendicular', () => {
-    const ew = edgeWorld()
+    const ew = edgeWorld(R2_HEXES)
     const e = ew.get(edgeId({ q: 0, r: 0 }, 0))! // toward {q:1,r:0} — centers differ along +x
     const a = coordToWorld({ q: 0, r: 0 })
     const b = coordToWorld({ q: 1, r: 0 })
@@ -35,7 +37,7 @@ describe('catanLayout', () => {
 
   describe('portWorld', () => {
     const { board } = createCatanGame({ playerCount: 4, layout: 'beginner' }, createRng(7))
-    const vw = vertexWorld()
+    const vw = vertexWorld(R2_HEXES)
 
     it('places one entry per port, pushed outward from the board center at the given distance', () => {
       const placements = portWorld(board, vw, 0.35)
@@ -82,8 +84,8 @@ describe('catanLayout', () => {
   it('rotating a +X-modeled road by edge.angle lays it along the edge, for all 6 directions', () => {
     // The edge (hex, d) spans vertices (hex, d) and (hex, (d+5)%6) — the two
     // corners whose centroid triples contain both hex and its d-neighbor.
-    const vw = vertexWorld()
-    const ew = edgeWorld()
+    const vw = vertexWorld(R2_HEXES)
+    const ew = edgeWorld(R2_HEXES)
     for (let d = 0; d < 6; d++) {
       const e = ew.get(edgeId({ q: 0, r: 0 }, d))!
       const va = vw.get(vertexId({ q: 0, r: 0 }, d))!
@@ -98,5 +100,16 @@ describe('catanLayout', () => {
       const cross = rx * ez - rz * ex
       expect(Math.abs(cross), `direction ${d}: road axis not parallel to edge`).toBeLessThan(1e-9)
     }
+  })
+})
+
+describe('radius-3 layout', () => {
+  it('lays out a radius-3 board from its hexes alone', () => {
+    const board = generateBoard(createRng(2), 'random', 3)
+    const vw = vertexWorld(board.hexes)
+    expect(Object.keys(topologyFor(board).hexVertices)).toHaveLength(37)
+    const placements = portWorld(board, vw, 0.5)
+    expect(placements).toHaveLength(11)
+    for (const p of placements) expect(Number.isFinite(p.position[0] + p.position[2])).toBe(true)
   })
 })

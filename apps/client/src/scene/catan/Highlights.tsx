@@ -76,7 +76,7 @@ export function Highlights({ view }: { view: CatanClientState }) {
   const color = seatColor(seat)
 
   if (mode.kind === 'placeSettlement' || mode.kind === 'placeCity') {
-    const vw = vertexWorld()
+    const vw = vertexWorld(view.board.hexes)
     return (
       <group>
         {legalVerticesForMode(view, seat, mode).map((id) => {
@@ -88,7 +88,7 @@ export function Highlights({ view }: { view: CatanClientState }) {
   }
 
   if (mode.kind === 'placeRoad' || mode.kind === 'roadBuilding') {
-    const ew = edgeWorld()
+    const ew = edgeWorld(view.board.hexes)
     return (
       <group>
         {legalEdgesForMode(view, seat, mode).map((id) => {

@@ -113,11 +113,11 @@ function CatanDebugHooks() {
       if (view === null || seat === null) return { mode: mode.kind, targets: [] }
       const targets: ScreenTarget[] = []
       for (const id of legalVerticesForMode(view, seat, mode)) {
-        const pos = vertexWorld().get(id)
+        const pos = vertexWorld(view.board.hexes).get(id)
         if (pos) targets.push({ kind: 'vertex', id, ...project(pos) })
       }
       for (const id of legalEdgesForMode(view, seat, mode)) {
-        const e = edgeWorld().get(id)
+        const e = edgeWorld(view.board.hexes).get(id)
         if (e) targets.push({ kind: 'edge', id, ...project(e.pos) })
       }
       if (mode.kind === 'robber') {

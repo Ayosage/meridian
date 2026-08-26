@@ -39,8 +39,8 @@ export function PickLayer({ view }: { view: CatanClientState }) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [cancelMode])
 
-  const vw = vertexWorld()
-  const ew = edgeWorld()
+  const vw = vertexWorld(view.board.hexes)
+  const ew = edgeWorld(view.board.hexes)
 
   return (
     <group>
