@@ -20,7 +20,7 @@ const MAX_INTENTS = 5000
  * here until someone consciously rules it bystander-public and adds it.
  */
 const BYSTANDER_FIELDS: Record<CatanEvent['kind'], readonly string[]> = {
-  roll: ['kind', 'player', 'dice', 'total', 'gains', 'robbed'],
+  roll: ['kind', 'player', 'dice', 'total', 'gains', 'robbed', 'denied'],
   discard: ['kind', 'player', 'count'], // never `resources`: composition is the discarder's secret
   robber: ['kind', 'player', 'victim'], // never `stolen`: the card is thief/victim knowledge
   monopoly: ['kind', 'player', 'resource', 'taken'],

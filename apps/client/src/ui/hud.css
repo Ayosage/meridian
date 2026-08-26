@@ -254,6 +254,7 @@
 }
 .hand-count .hand-label { display: inline-flex; align-items: center; gap: 4px; text-transform: capitalize; opacity: 0.75; }
 .hand-count .hand-value { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hand-count .bank-value { font-size: 10px; opacity: 0.5; font-variant-numeric: tabular-nums; }
 .catan-hud .right-rail {
   position: absolute;
   top: 12px;

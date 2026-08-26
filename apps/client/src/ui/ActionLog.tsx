@@ -42,9 +42,13 @@ export function eventLine(event: CatanEvent): LineSegment[] {
     case 'roll': {
       const segs: LineSegment[] = [seatSeg(event.player), text(` rolled ${event.total}`)]
       const gainEntries = Object.entries(event.gains)
-      if (gainEntries.length === 0) segs.push(text(' — no production'))
+      // A bank-shortage wipe explains the silence better than "no production"
+      if (gainEntries.length === 0 && !event.denied?.length) segs.push(text(' — no production'))
       for (const [s, gain] of gainEntries) {
         segs.push(text(' · '), seatSeg(Number(s)), text(' +'), ...mapSegs(gain))
+      }
+      if (event.denied?.length) {
+        segs.push(text(' — '), ...event.denied.map((r) => res(r)), text(' exhausted — nobody paid'))
       }
       if (event.robbed?.length) {
         segs.push(text(' · robber blocked '), ...event.robbed.map((r) => res(r)))

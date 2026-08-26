@@ -1,5 +1,6 @@
 import {
   coordKey,
+  productionDenied,
   RESOURCES,
   standardTopology,
   TERRAIN_RESOURCE,
@@ -53,10 +54,11 @@ export function deriveCatanEvents(
       const total = dice[0] + dice[1]
       // Why-nothing context: hexes matching the roll where the robber blocked
       // a payout somebody actually had a building on — an unoccupied blocked
-      // hex deprived no one and would only confuse the log. Bank-shortage
-      // non-payouts (multi-claimant short bank pays nobody) are the other
-      // silent payout-eater; the log does NOT explain those yet.
+      // hex deprived no one and would only confuse the log. The other silent
+      // payout-eater, the multi-claimant bank shortage, is carried in
+      // `denied` (derived by the engine's own productionDenied).
       const robbedHexes: Resource[] = []
+      const denied = total !== 7 ? productionDenied(before, total) : []
       if (total !== 7) {
         const topo = standardTopology()
         for (const hex of before.board.hexes) {
@@ -76,6 +78,7 @@ export function deriveCatanEvents(
         total,
         gains: gains(before, after),
         ...(robbedHexes.length > 0 ? { robbed: robbedHexes } : {}),
+        ...(denied.length > 0 ? { denied } : {}),
       })
       break
     }

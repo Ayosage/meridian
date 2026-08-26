@@ -228,8 +228,8 @@ four attempts.
   bystander seat's events never carry fields outside a whitelist.
 - Action-log entry keys change wholesale as the log grows (cosmetic
   unmount/remount churn); a monotonic event id in the store would fix.
-- `events.ts` roll comment overstates coverage (bank-shortage non-payouts are
-  not yet explained in the log) and `robbed` can name hexes nobody was owed.
+- ~~`events.ts` roll comment overstates coverage~~ (2026-08-26: bank-shortage
+  non-payouts now explained via the roll `denied` field; see Bugs below).
 - Port boats + sign content rebuild on each robber move (`board` identity
   re-mint); keying Ports on `board.ports` would drop even that.
 - Reconnect carries no event backfill — log gaps silently (fine for an
@@ -254,12 +254,15 @@ multi-claimant demand exceeds what's left and pays nothing. No robber events
 between the paying and silent rolls in any example. The payout engine was
 fuzz-verified this session: ~16k rolls across 1,500 random states (scarce
 banks, robber, cities) match an independent payout model exactly.
-Real fixes, now ticketed: (1) roll event should carry a `denied` field so the
-log line can say "8 — wheat exhausted, nobody paid" (the events.ts comment now
-says truthfully that this is NOT yet explained); (2) show bank stock in the
-HUD — the rule is fair but currently unknowable at the table.
-Cosmetic, spotted in example 2's paste: a roll line can render a trailing "·"
-separator with nothing after it — check ActionLog's gains join.
+**FIXED (2026-08-26):** (1) roll events now carry `denied` (rules'
+`productionDenied`, whitelisted public in the redact-replay guard) and the
+log line reads "rolled 8 — [wheat] exhausted — nobody paid"; (2) HandStrip
+shows the bank's stock as a dim second line under each resource.
+Cosmetic trailing "·" from example 2's paste: code review found no path to a
+dangling separator in the rendered DOM — the pastes' oddities ("P3 +",
+trailing "·") are text-copy artifacts (resource icons are SVGs that copy as
+empty text; a count of exactly 1 is carried by the icon alone). Watch for a
+screenshot recurrence; closing on the paste evidence alone.
 
 # example 1 
 P2 declined the offer

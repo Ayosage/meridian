@@ -10,6 +10,7 @@ import {
   RESOURCES,
   TERRAIN_RESOURCE,
   totalResources,
+  type Resource,
   type ResourceCount,
 } from './types'
 
@@ -18,7 +19,8 @@ import {
  * cover a resource and MORE THAN ONE player claims it, nobody gets it; a single
  * claimant takes what remains.
  */
-export function distributeProduction(state: CatanState, roll: number): CatanState {
+/** Gross per-player demand for a non-7 roll, before the bank-shortage rule. */
+function grossProduction(state: CatanState, roll: number): ResourceCount[] {
   const topo = standardTopology()
   const gains: ResourceCount[] = state.players.map(() => emptyResources())
 
@@ -33,7 +35,25 @@ export function distributeProduction(state: CatanState, roll: number): CatanStat
       if (b) gains[b.owner]![res] += b.kind === 'city' ? 2 : 1
     }
   }
+  return gains
+}
 
+/**
+ * Resources the bank-shortage rule wipes for this roll: demanded by 2+
+ * players but not fully stockable, so nobody is paid. (A single claimant
+ * takes the remainder instead — not a denial.) Feeds the roll event so the
+ * log can explain an otherwise silent non-payout.
+ */
+export function productionDenied(state: CatanState, roll: number): Resource[] {
+  const gains = grossProduction(state, roll)
+  return RESOURCES.filter((res) => {
+    const total = gains.reduce((s, g) => s + g[res], 0)
+    return total > state.bank[res] && gains.filter((g) => g[res] > 0).length > 1
+  })
+}
+
+export function distributeProduction(state: CatanState, roll: number): CatanState {
+  const gains = grossProduction(state, roll)
   const bank = { ...state.bank }
   for (const res of RESOURCES) {
     const total = gains.reduce((s, g) => s + g[res], 0)

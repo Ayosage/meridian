@@ -21,6 +21,15 @@ describe('eventLine', () => {
     expect(line).toContain('robber blocked [1 ore]')
   })
 
+  it('roll with a bank-shortage wipe explains the silent non-payout', () => {
+    const line = textOf(
+      eventLine({ kind: 'roll', player: 1, dice: [4, 4], total: 8, gains: {}, denied: ['wheat'] }),
+    )
+    expect(line).toContain('rolled 8')
+    expect(line).toContain('[1 wheat] exhausted — nobody paid')
+    expect(line).not.toContain('no production')
+  })
+
   it('steal renders the resource when present, "a card" when redacted', () => {
     const known = textOf(eventLine({ kind: 'robber', player: 2, victim: 0, stolen: 'wheat' }))
     expect(known).toContain('stole [1 wheat] from @0')

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createCatanGame, createRng, distributeProduction, vertexId } from '../../src/catan'
+import { createCatanGame, createRng, distributeProduction, productionDenied, vertexId } from '../../src/catan'
 import { apply, die, expectError, setupComplete, stubRng } from './helpers'
 
 describe('rollDice', () => {
@@ -69,6 +69,26 @@ describe('distributeProduction', () => {
     const after = distributeProduction(state, 8) // city demands 2, bank has 1
     expect(after.players[0]!.resources.brick).toBe(1)
     expect(after.bank.brick).toBe(0)
+  })
+
+  it('productionDenied names multi-claimant shortages and nothing else', () => {
+    const base = setupComplete()
+    const v = vertexId({ q: 2, r: 0 }, 3)
+    const twoClaimants = {
+      ...base,
+      buildings: { ...base.buildings, [v]: { owner: 1, kind: 'settlement' as const } },
+    }
+    // fully stocked: nothing denied
+    expect(productionDenied(base, 8)).toEqual([])
+    // two claimants, bank short: denied
+    expect(productionDenied({ ...twoClaimants, bank: { ...base.bank, brick: 1 } }, 8)).toEqual(['brick'])
+    // single claimant takes the remainder: not denied
+    const vertex = Object.keys(base.buildings).find((b) => base.buildings[b]!.owner === 0 && b.includes('2,0'))!
+    const withCity = { ...base, buildings: { ...base.buildings, [vertex]: { owner: 0, kind: 'city' as const } } }
+    expect(productionDenied({ ...withCity, bank: { ...base.bank, brick: 1 } }, 8)).toEqual([])
+    // robbed hex demands nothing, so a short bank there is not a denial
+    const robbed = { ...twoClaimants, bank: { ...base.bank, brick: 0 }, board: { ...base.board, robber: '2,0' } }
+    expect(productionDenied(robbed, 8)).toEqual([])
   })
 
   it('resource conservation: bank + hands is invariant', () => {

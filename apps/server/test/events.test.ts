@@ -12,6 +12,7 @@ import {
   stubRng,
   subtractResources,
   SETUP_PLACEMENTS,
+  vertexId,
   type CatanIntent,
   type CatanState,
   type ResourceCount,
@@ -92,6 +93,26 @@ describe('deriveCatanEvents', () => {
     const { events } = eventsFor(s, { type: 'rollDice', player: s.turn.current }, stubRng([die(3), die(3)]))
     const roll = events.find((e) => e.kind === 'roll')!
     if (roll.kind === 'roll') expect(roll.robbed).toBeUndefined()
+  })
+
+  it('roll: names resources the bank-shortage rule wiped; absent otherwise', () => {
+    let s = setupComplete()
+    // two claimants on the hills (2,0) 8-hex, bank drained to 1 brick →
+    // the 8 pays neither and the event must say why
+    const v = vertexId({ q: 2, r: 0 }, 3)
+    s = {
+      ...s,
+      buildings: { ...s.buildings, [v]: { owner: 1, kind: 'settlement' as const } },
+      bank: { ...s.bank, brick: 1 },
+    }
+    const { events } = eventsFor(s, { type: 'rollDice', player: s.turn.current }, stubRng([die(3), die(5)]))
+    const roll = events.find((e) => e.kind === 'roll')!
+    if (roll.kind === 'roll') expect(roll.denied).toEqual(['brick'])
+
+    // fully stocked bank: no denied field at all
+    const plain = eventsFor(setupComplete(), { type: 'rollDice', player: s.turn.current }, stubRng([die(3), die(5)]))
+    const plainRoll = plain.events.find((e) => e.kind === 'roll')!
+    if (plainRoll.kind === 'roll') expect(plainRoll.denied).toBeUndefined()
   })
 
   it('bankTrade: reports the real rate paid', () => {

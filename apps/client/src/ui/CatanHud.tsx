@@ -1,12 +1,12 @@
 import { useEffect } from 'react'
-import { RESOURCES, type CatanClientState } from '@meridian/rules'
+import { type CatanClientState } from '@meridian/rules'
 import { leaveCatanMatch, sendCatanIntent } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
 import { playerCards } from '../scene/catan/hudLogic'
 import { seatColor } from '../scene/catan/palette'
 import { ActionLog } from './ActionLog'
 import { DiceCanvas } from './DiceCanvas'
-import { ResourceIcon } from './ResourceIcon'
+import { HandStrip } from './HandStrip'
 // Only App.tsx imports hud.css today; this also mounts standalone wherever
 // CatanHud is used, so it owns its own stylesheet dependency rather than
 // relying on whichever entry point happens to import it first.
@@ -42,18 +42,6 @@ function DiceDisplay({ dice }: { dice: readonly [number, number] | null }) {
   )
 }
 
-function HandStrip({ view }: { view: CatanClientState }) {
-  return (
-    <div className="hand-strip">
-      {RESOURCES.map((r) => (
-        <div className="hand-count" key={r} data-testid={`hand-${r}`}>
-          <span className="hand-label"><ResourceIcon r={r} />{r}</span>
-          <span className="hand-value">{view.you.resources[r]}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 function PlayerStrip({ view, seat, connected }: { view: CatanClientState; seat: number | null; connected: boolean[] }) {
   return (
