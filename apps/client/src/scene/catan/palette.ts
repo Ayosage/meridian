@@ -41,6 +41,10 @@ export const SEAT_COLORS: readonly string[] = [
   palette.players.blue,
   palette.players.white,
   palette.players.orange,
+  '#6b3fa0', // purple — spike-verified at distance
+  '#2e8b3a', // kelly green — spike-verified
+  '#d873a8', // pink (the lightened magenta — magenta drifted red at distance)
+  '#56b8d8', // sky-cyan
 ]
 
 export function seatColor(seat: number): string {
