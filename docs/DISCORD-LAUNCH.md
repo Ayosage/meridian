@@ -6,7 +6,10 @@ people click through into seats. The contract between the projects is kept
 deliberately thin — one endpoint plus a join-URL format — so each side can
 be built and tested alone.
 
-Status 2026-08-26: contract sketch. Nothing implemented on either side.
+Status 2026-08-26: Meridian half implemented (endpoint, ?join= client path,
+expiry, seatNames, container/fly scaffolding — deployment itself pending;
+docker build not yet verified locally, Docker was down). `players` accepts
+3..8 (the 8-player build landed first). Steward half pending.
 
 ## The contract (v0)
 
@@ -57,11 +60,11 @@ or expired code falls back to the normal lobby with an error toast.
 ## What each side needs
 
 Meridian (all server/client work, no steward dependency):
-- [ ] `POST /matches` route + `LAUNCH_TOKEN` env + room-expiry timer
-- [ ] Client `?join=` boot path
+- [x] `POST /matches` route + `LAUNCH_TOKEN` env + room-expiry timer
+- [x] Client `?join=` boot path
 - [ ] Public deployment (server WS + client origin; steward is Fly-oriented
-      — Fly works for both)
-- [ ] Later: 8-player build raises the `players` ceiling (spiked 2026-08-25)
+      — Fly works for both; Dockerfile + fly.toml scaffolded in apps/server)
+- [x] 8-player build raises the `players` ceiling to 3..8
 
 Steward (one plan task, no Meridian dependency once the contract is fixed):
 - [ ] `/catan players:<n> bots:<n>` command → `POST /matches` → embed with

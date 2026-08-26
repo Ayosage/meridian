@@ -1,0 +1,22 @@
+# Meridian game server (Colyseus + POST /matches launch endpoint).
+# Build from the repo root: docker build -f apps/server/Dockerfile .
+FROM node:20-slim
+
+WORKDIR /app
+RUN corepack enable
+
+# Workspace manifests first so dependency layers cache across source edits.
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY apps/server/package.json apps/server/
+COPY packages/rules/package.json packages/rules/
+COPY packages/protocol/package.json packages/protocol/
+
+RUN pnpm install --frozen-lockfile --filter server... --prod=false
+
+COPY packages/rules packages/rules
+COPY packages/protocol packages/protocol
+COPY apps/server apps/server
+
+ENV NODE_ENV=production
+EXPOSE 2567
+CMD ["pnpm", "-C", "apps/server", "start"]
