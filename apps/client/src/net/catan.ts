@@ -6,6 +6,7 @@ import {
   type MatchEndedPayload,
   type RuleErrorPayload,
 } from '@meridian/protocol'
+import type { CatanPlayerCount } from '@meridian/rules'
 import { useCatanStore } from '../scene/catan/catanStore'
 import { tokenStorage } from './tokenStorage'
 
@@ -48,7 +49,7 @@ function numberParam(name: string): number | undefined {
   return Number.isFinite(value) ? value : undefined
 }
 
-export async function createCatanMatch(players: 3 | 4, bots: number): Promise<void> {
+export async function createCatanMatch(players: CatanPlayerCount, bots: number): Promise<void> {
   useCatanStore.getState().setStatus('connecting')
   const seed = numberParam('seed')
   const targetVp = numberParam('vp')

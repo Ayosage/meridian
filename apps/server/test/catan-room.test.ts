@@ -102,3 +102,14 @@ describe('CatanRoom lobby and intent loop', () => {
     expect(sink.at(-1)!.view.playerCount).toBe(3)
   })
 })
+
+describe('player count 3..8', () => {
+  it('accepts an 8-player room and rejects 2 and 9', async () => {
+    const room = await server.sdk.joinOrCreate('catan', { players: 8, bots: 7, seed: 1, pilotDelayMs: 0 })
+    await settle()
+    expect(room.state.targetPlayers).toBe(8)
+    await room.leave()
+    await expect(server.sdk.joinOrCreate('catan', { players: 2 })).rejects.toThrow()
+    await expect(server.sdk.joinOrCreate('catan', { players: 9 })).rejects.toThrow()
+  })
+})

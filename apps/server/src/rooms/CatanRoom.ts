@@ -10,6 +10,7 @@ import {
   redactCatanState,
   stubRng,
   type CatanIntent,
+  type CatanPlayerCount,
   type CatanState,
   type CompanionOpts,
   type Rng,
@@ -21,7 +22,7 @@ import { CatanLobbyState } from '../schema/CatanLobbyState'
 import { generateRoomId, releaseRoomId } from '../room-id'
 
 interface CreateOptions {
-  players: 3 | 4
+  players: number
   bots?: number
   layout?: 'beginner' | 'random'
   pilotDelayMs?: number
@@ -57,7 +58,8 @@ export class CatanRoom extends Room<CatanLobbyState> {
   private offerDeadlineHit = false
 
   async onCreate(options: CreateOptions) {
-    if (options.players !== 3 && options.players !== 4) throw new Error('players must be 3 or 4')
+    if (!Number.isInteger(options.players) || options.players < 3 || options.players > 8)
+      throw new Error('players must be 3..8')
     const bots = options.bots ?? 0
     if (!Number.isInteger(bots) || bots < 0 || bots > options.players - 1)
       throw new Error('bots must be an integer in 0..players-1')
@@ -94,13 +96,13 @@ export class CatanRoom extends Room<CatanLobbyState> {
       return client.send(MSG.RULE_ERROR, { code: 'NOT_HOST', message: 'only the host can start early' })
     if (
       this.state.phase !== 'waiting' ||
-      this.state.seats.length !== 3 ||
-      this.state.targetPlayers !== 4 ||
+      this.state.seats.length < 3 ||
+      this.state.seats.length !== this.state.targetPlayers - 1 ||
       this.botCount !== 0
     )
       return client.send(MSG.RULE_ERROR, {
         code: 'BAD_START',
-        message: 'early start needs exactly 3 seated players in a 4-room',
+        message: `early start needs exactly ${this.state.targetPlayers - 1} seated players`,
       })
     this.startGame()
   }
@@ -112,7 +114,7 @@ export class CatanRoom extends Room<CatanLobbyState> {
       this.seatClients.push(null)
       this.seatKinds.push('bot')
     }
-    const n = this.state.seats.length as 3 | 4
+    const n = this.state.seats.length as CatanPlayerCount
     this.game = createCatanGame({ playerCount: n, layout: this.layout, targetVp: this.targetVp }, this.rng)
     this.state.phase = 'playing'
     this.lock()

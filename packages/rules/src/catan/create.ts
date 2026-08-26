@@ -1,22 +1,30 @@
 import type { PlayerId } from '../state'
 import { generateBoard } from './board'
-import { BANK_PER_RESOURCE, DEV_DECK_COMPOSITION, PIECE_LIMITS } from './data'
+import { BOARD_SIZES, PIECE_LIMITS } from './data'
 import { shuffle, type Rng } from './rng'
 import type { CatanPlayer, CatanState } from './state'
 import { emptyResources, type DevCard } from './types'
 
+export type CatanPlayerCount = 3 | 4 | 5 | 6 | 7 | 8
+
+export function boardRadiusFor(playerCount: CatanPlayerCount): 2 | 3 {
+  return playerCount <= 4 ? 2 : 3
+}
+
 export interface CatanGameOptions {
-  playerCount: 3 | 4
+  playerCount: CatanPlayerCount
   layout?: 'beginner' | 'random'
   /** Victory-point target override; omit for the standard 10. */
   targetVp?: number
 }
 
 export function createCatanGame(options: CatanGameOptions, rng: Rng): CatanState {
-  const board = generateBoard(rng, options.layout ?? 'random')
+  const radius = boardRadiusFor(options.playerCount)
+  const size = BOARD_SIZES[radius]
+  const board = generateBoard(rng, options.layout ?? 'random', radius)
   const deck = shuffle(
     rng,
-    (Object.entries(DEV_DECK_COMPOSITION) as [DevCard, number][]).flatMap(([card, n]) =>
+    (Object.entries(size.devDeck) as [DevCard, number][]).flatMap(([card, n]) =>
       Array.from({ length: n }, () => card),
     ),
   )
@@ -36,11 +44,11 @@ export function createCatanGame(options: CatanGameOptions, rng: Rng): CatanState
     buildings: {},
     roads: {},
     bank: {
-      wood: BANK_PER_RESOURCE,
-      brick: BANK_PER_RESOURCE,
-      sheep: BANK_PER_RESOURCE,
-      wheat: BANK_PER_RESOURCE,
-      ore: BANK_PER_RESOURCE,
+      wood: size.bankPerResource,
+      brick: size.bankPerResource,
+      sheep: size.bankPerResource,
+      wheat: size.bankPerResource,
+      ore: size.bankPerResource,
     },
     devDeck: deck,
     turn: {

@@ -41,3 +41,19 @@ describe('createCatanGame', () => {
     expect(err.code).toBe('BAD_PHASE')
   })
 })
+
+describe('player counts 5-8', () => {
+  it('5-8 players get the radius-3 board, scaled bank and dev deck', () => {
+    const state = createCatanGame({ playerCount: 6 }, createRng(3))
+    expect(state.players).toHaveLength(6)
+    expect(state.board.hexes).toHaveLength(37)
+    expect(state.bank.wood).toBe(24)
+    expect(state.devDeck).toHaveLength(34)
+  })
+
+  it('3-4 players keep the classic board', () => {
+    const state = createCatanGame({ playerCount: 4 }, createRng(3))
+    expect(state.board.hexes).toHaveLength(19)
+    expect(state.bank.wood).toBe(19)
+  })
+})
