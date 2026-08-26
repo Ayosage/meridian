@@ -236,3 +236,98 @@ four attempts.
   ephemeral ticker; revisit only if the log gains persistence).
 - Companion rules test prints its robber tally table on every suite run —
   silence whenever convenient.
+
+
+
+
+
+### Bugs ###
+
+## no production on roll - wheat - 8 
+
+**DIAGNOSED (2026-08-25): not a bug — the bank-shortage rule, invisibly.**
+All three examples are the multi-claimant bank-shortage wipe (spec §2: bank
+can't cover a resource + 2+ players owed it → NOBODY gets it). Signature in
+every example: the previous 8 pays several players at once (example 3 moves
+9 wheat of the 19-card supply in one roll), then the next 8's identical
+multi-claimant demand exceeds what's left and pays nothing. No robber events
+between the paying and silent rolls in any example. The payout engine was
+fuzz-verified this session: ~16k rolls across 1,500 random states (scarce
+banks, robber, cities) match an independent payout model exactly.
+Real fixes, now ticketed: (1) roll event should carry a `denied` field so the
+log line can say "8 — wheat exhausted, nobody paid" (the events.ts comment now
+says truthfully that this is NOT yet explained); (2) show bank stock in the
+HUD — the rule is fair but currently unknowable at the table.
+Cosmetic, spotted in example 2's paste: a roll line can render a trailing "·"
+separator with nothing after it — check ActionLog's gains join.
+
+# example 1 
+P2 declined the offer
+You declined the offer
+P4 offered for
+P4 rolled 8 — no production
+P3 ended turn 39
+P3 traded for with P2
+P2 accepted the offer
+You declined the offer
+P3 offered for
+P3 rolled 8 · You +2 · P3 + · P4 +3
+P2 ended turn 38
+P2 traded for with P4
+P4 accepted the offer
+P3 declined the offer
+# example 2
+P3 traded for with P2
+P2 accepted the offer
+You declined the offer
+P3 offered for
+P3 rolled 8 — no production
+P2 ended turn 42
+P2 traded for with P3
+P3 accepted the offer
+You declined the offer
+P2 offered for
+P2 rolled 3 · You + · P2 + · P3 + · P4 +
+You ended turn 41
+You rolled 6 · P2 +3 ·
+
+# example 3 
+Your turn — roll
+⚅ —
+drag to rotate · scroll to zoom
+wood1
+brick0
+sheep0
+wheat4
+ore0
+You
+5 cards0 dev0 knights7 VP
+Player 2
+7 cards0 dev3 knights9 VP
+Player 3
+2 cards2 dev4 knights6 VP
+Player 4
+6 cards2 dev0 knights6 VP
+P4 ended turn 76
+P4 built a road
+P4 bank-traded 4 →
+P4 withdrew the offer
+P3 declined the offer
+P2 declined the offer
+You declined the offer
+P4 offered for
+P4 rolled 8 — no production
+P3 ended turn 75
+P3 built a road
+P3 bank-traded 4 →
+P3 built a road
+P3 bank-traded 4 →
+P3 withdrew the offer
+P4 declined the offer
+P2 declined the offer
+You declined the offer
+P3 offered for
+P3 rolled 8 · You +3 · P3 +2 · P4 +4
+P2 ended turn 74
+P2 traded for with P3
+P3 accepted the offer
