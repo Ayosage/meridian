@@ -6,6 +6,7 @@ import {
   inRadius,
   spiralCoords,
   standardTopology,
+  topologyFor,
   vertexId,
   type Coord,
 } from '../../src/index'
@@ -108,5 +109,16 @@ describe('standard board topology', () => {
         },
       ),
     )
+  })
+})
+
+describe('topologyFor', () => {
+  it('infers radius from hex count and memoizes', () => {
+    const r2 = topologyFor({ hexes: new Array(19) })
+    expect(r2).toBe(standardTopology()) // same memo entry
+    const r3 = topologyFor({ hexes: new Array(37) })
+    expect(Object.keys(r3.hexVertices)).toHaveLength(37)
+    expect(topologyFor({ hexes: new Array(37) })).toBe(r3)
+    expect(() => topologyFor({ hexes: new Array(20) })).toThrow(/unknown board size/)
   })
 })

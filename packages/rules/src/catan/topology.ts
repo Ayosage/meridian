@@ -113,3 +113,18 @@ export function standardTopology(): Topology {
   if (!memoizedStandard) memoizedStandard = buildTopology(spiralCoords())
   return memoizedStandard
 }
+
+const RADIUS_BY_HEXES: Record<number, number> = { 19: 2, 37: 3 }
+const memoByRadius = new Map<number, Topology>()
+
+/** Topology for a board, inferred from its hex count. Memoized per radius. */
+export function topologyFor(board: { hexes: readonly unknown[] }): Topology {
+  const radius = RADIUS_BY_HEXES[board.hexes.length]
+  if (radius === undefined) throw new Error(`unknown board size: ${board.hexes.length} hexes`)
+  let topo = memoByRadius.get(radius)
+  if (!topo) {
+    topo = radius === 2 ? standardTopology() : buildTopology(spiralCoords(radius))
+    memoByRadius.set(radius, topo)
+  }
+  return topo
+}
