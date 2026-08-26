@@ -2,7 +2,7 @@ import { coordKey } from '../coord'
 import type { CatanIntent } from './intent'
 import { affordable, legalCityVertices, legalRoadEdges, legalSettlementVertices } from './queries'
 import type { CatanState } from './state'
-import { standardTopology } from './topology'
+import { topologyFor } from './topology'
 import { RESOURCES, totalResources } from './types'
 
 /**
@@ -12,7 +12,7 @@ import { RESOURCES, totalResources } from './types'
  */
 export function botIntent(state: CatanState): CatanIntent {
   const t = state.turn
-  const topo = standardTopology()
+  const topo = topologyFor(state.board)
 
   if (t.phase === 'setup') {
     const p = t.current

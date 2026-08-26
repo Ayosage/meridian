@@ -3,7 +3,7 @@ import type { PlayerId } from '../state'
 import { catanError as err, type CatanRuleError } from './intent'
 import { pick, type Rng } from './rng'
 import type { CatanState } from './state'
-import { standardTopology } from './topology'
+import { topologyFor } from './topology'
 import {
   addResources,
   hasResources,
@@ -50,7 +50,7 @@ export function applyMoveRobber(
     return err('BAD_ROBBER', `${key} is not a board hex`)
   if (key === state.board.robber) return err('BAD_ROBBER', 'the robber must move to a new hex')
 
-  const topo = standardTopology()
+  const topo = topologyFor(state.board)
   const victims = state.players
     .map((_, i) => i)
     .filter(

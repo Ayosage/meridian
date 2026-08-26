@@ -15,7 +15,7 @@ import {
 import type { Rng } from './rng'
 import { checkWin } from './score'
 import type { CatanState } from './state'
-import { standardTopology } from './topology'
+import { topologyFor } from './topology'
 import { addResources, TERRAIN_RESOURCE, type Resource } from './types'
 
 /**
@@ -75,7 +75,7 @@ function applyPlaceSetupSettlement(state: CatanState, vertex: string): CatanStat
   if (t.phase !== 'setup') return err('BAD_PHASE', 'setup is over')
   if (t.setup?.expect !== 'settlement')
     return err('ILLEGAL_PLACEMENT', 'place the road for your settlement first')
-  const topo = standardTopology()
+  const topo = topologyFor(state.board)
   if (!topo.vertexEdges[vertex]) return err('ILLEGAL_PLACEMENT', 'not a board vertex')
   if (!settlementDistanceOk(state, vertex))
     return err('ILLEGAL_PLACEMENT', 'settlements must be at least two edges apart')
@@ -115,7 +115,7 @@ function applyPlaceSetupRoad(state: CatanState, edge: string): CatanState | Cata
   if (t.phase !== 'setup') return err('BAD_PHASE', 'setup is over')
   if (t.setup?.expect !== 'road' || t.setup.lastSettlement === null)
     return err('ILLEGAL_PLACEMENT', 'place your settlement first')
-  const topo = standardTopology()
+  const topo = topologyFor(state.board)
   const endpoints = topo.edgeVertices[edge]
   if (!endpoints) return err('ILLEGAL_PLACEMENT', 'not a board edge')
   if (state.roads[edge] !== undefined) return err('ILLEGAL_PLACEMENT', 'edge already has a road')

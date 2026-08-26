@@ -1,14 +1,14 @@
 import type { PlayerId } from '../state'
 import { MIN_LONGEST_ROAD } from './data'
 import type { CatanState } from './state'
-import { standardTopology, type EdgeId, type VertexId } from './topology'
+import { topologyFor, type EdgeId, type VertexId } from './topology'
 
 /**
  * Longest simple edge-path in the player's road network. Opponent buildings
  * block passage THROUGH a vertex; paths may still start or end at one.
  */
 export function longestRoadLength(state: CatanState, player: PlayerId): number {
-  const topo = standardTopology()
+  const topo = topologyFor(state.board)
   const owned = new Set<EdgeId>(Object.keys(state.roads).filter((e) => state.roads[e] === player))
   if (owned.size === 0) return 0
 

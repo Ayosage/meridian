@@ -6,7 +6,7 @@ import {
   legalRoadEdges,
   legalSettlementVertices,
   RESOURCES,
-  standardTopology,
+  topologyFor,
   type CatanClientState,
   type Coord,
   type EdgeId,
@@ -148,7 +148,7 @@ export function legalEdgesForMode(view: CatanClientState, seat: number, mode: Mo
   if (view.turn.phase !== 'setup') return legalRoadEdges(view, seat)
   const last = view.turn.setup?.lastSettlement
   if (!last) return []
-  return (standardTopology().vertexEdges[last] ?? []).filter((e) => view.roads[e] === undefined)
+  return (topologyFor(view.board).vertexEdges[last] ?? []).filter((e) => view.roads[e] === undefined)
 }
 
 /** Pure: the intent a vertex click produces in the given mode, or null if illegal/inapplicable. */
@@ -182,7 +182,7 @@ export function resolveEdgeClick(
 
 /** Adjacent-owner ids the robber could steal from at `hex`: not us, and holding resources. */
 export function robberVictims(view: CatanClientState, seat: number, hex: Coord): number[] {
-  const verts = standardTopology().hexVertices[coordKey(hex)] ?? []
+  const verts = topologyFor(view.board).hexVertices[coordKey(hex)] ?? []
   const owners = new Set<number>()
   for (const v of verts) {
     const owner = view.buildings[v]?.owner

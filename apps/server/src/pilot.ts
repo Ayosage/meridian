@@ -4,7 +4,7 @@ import {
   hasResources,
   legalSettlementVertices,
   pick,
-  standardTopology,
+  topologyFor,
   totalResources,
   type CatanIntent,
   type CatanState,
@@ -48,7 +48,7 @@ export function pilotIntent(state: CatanState, seat: PlayerId, rng: Rng): CatanI
         const spots = legalSettlementVertices(state, seat, { setup: true })
         return { type: 'placeSetupSettlement', player: seat, vertex: pick(rng, spots) }
       }
-      const topo = standardTopology()
+      const topo = topologyFor(state.board)
       const settlement = t.setup!.lastSettlement!
       const edge = (topo.vertexEdges[settlement] ?? []).find((e) => state.roads[e] === undefined)!
       return { type: 'placeSetupRoad', player: seat, edge }
@@ -68,7 +68,7 @@ export function pilotIntent(state: CatanState, seat: PlayerId, rng: Rng): CatanI
 }
 
 function robberMove(state: CatanState, seat: PlayerId, rng: Rng): CatanIntent {
-  const topo = standardTopology()
+  const topo = topologyFor(state.board)
   const candidates = state.board.hexes.filter((h) => coordKey(h.coord) !== state.board.robber)
   const untouched = candidates.filter(
     (h) => !(topo.hexVertices[coordKey(h.coord)] ?? []).some((v) => state.buildings[v]),

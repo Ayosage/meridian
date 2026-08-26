@@ -2,7 +2,7 @@ import type { PlayerId } from '../state'
 import { COSTS } from './data'
 import { settlementDistanceOk } from './placement'
 import type { CatanState } from './state'
-import { standardTopology, type EdgeId, type VertexId } from './topology'
+import { topologyFor, type EdgeId, type VertexId } from './topology'
 import { hasResources, type Resource } from './types'
 
 /**
@@ -13,7 +13,7 @@ export type PlacementView = Pick<CatanState, 'board' | 'buildings' | 'roads'>
 
 /** Vacant edges connected to the player's network; roads cannot pass through an opponent's building. */
 export function legalRoadEdges(state: PlacementView, player: PlayerId): EdgeId[] {
-  const topo = standardTopology()
+  const topo = topologyFor(state.board)
   return topo.edges.filter((e) => {
     if (state.roads[e] !== undefined) return false
     for (const v of topo.edgeVertices[e]!) {
@@ -32,7 +32,7 @@ export function legalSettlementVertices(
   player: PlayerId,
   opts: { setup?: boolean } = {},
 ): VertexId[] {
-  const topo = standardTopology()
+  const topo = topologyFor(state.board)
   return topo.vertices.filter((v) => {
     if (!settlementDistanceOk(state, v)) return false
     if (opts.setup) return true

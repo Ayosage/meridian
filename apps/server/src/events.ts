@@ -2,7 +2,7 @@ import {
   coordKey,
   productionDenied,
   RESOURCES,
-  standardTopology,
+  topologyFor,
   TERRAIN_RESOURCE,
   totalResources,
   type CatanIntent,
@@ -60,7 +60,7 @@ export function deriveCatanEvents(
       const robbedHexes: Resource[] = []
       const denied = total !== 7 ? productionDenied(before, total) : []
       if (total !== 7) {
-        const topo = standardTopology()
+        const topo = topologyFor(before.board)
         for (const hex of before.board.hexes) {
           if (hex.token !== total) continue
           const key = coordKey(hex.coord)

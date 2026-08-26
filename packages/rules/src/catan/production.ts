@@ -3,7 +3,7 @@ import { DISCARD_THRESHOLD } from './data'
 import { catanError as err, type CatanRuleError } from './intent'
 import { rollD6, type Rng } from './rng'
 import type { CatanState } from './state'
-import { standardTopology } from './topology'
+import { topologyFor } from './topology'
 import {
   addResources,
   emptyResources,
@@ -21,7 +21,7 @@ import {
  */
 /** Gross per-player demand for a non-7 roll, before the bank-shortage rule. */
 function grossProduction(state: CatanState, roll: number): ResourceCount[] {
-  const topo = standardTopology()
+  const topo = topologyFor(state.board)
   const gains: ResourceCount[] = state.players.map(() => emptyResources())
 
   for (const hex of state.board.hexes) {

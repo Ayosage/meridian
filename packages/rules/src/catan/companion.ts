@@ -6,7 +6,7 @@ import { settlementDistanceOk } from './placement'
 import { legalCityVertices, legalRoadEdges, legalSettlementVertices, affordable } from './queries'
 import type { Rng } from './rng'
 import type { CatanState } from './state'
-import { standardTopology, type EdgeId, type VertexId } from './topology'
+import { topologyFor, type EdgeId, type VertexId } from './topology'
 import { hasResources, RESOURCES, totalResources, type Resource, type ResourceCount } from './types'
 
 /**
@@ -67,7 +67,7 @@ export function missingForGoal(
  * furthest ahead, never our own (heavily negative if we build there).
  */
 export function robberHexScore(state: CatanState, seat: PlayerId, hexKey: string): number {
-  const topo = standardTopology()
+  const topo = topologyFor(state.board)
   const hex = state.board.hexes.find((h) => coordKey(h.coord) === hexKey)
   let owners = 0
   for (const v of topo.hexVertices[hexKey] ?? []) {
@@ -202,7 +202,7 @@ export function vertexDiversity(state: Pick<CatanState, 'board'>, vertex: Vertex
  * once a region's frontier is taken, its remaining corners stop scoring.
  */
 export function frontierPips(state: Pick<CatanState, 'board' | 'buildings'>, vertex: VertexId): number {
-  const topo = standardTopology()
+  const topo = topologyFor(state.board)
   const ring1 = topo.vertexVertices[vertex] ?? []
   const seen = new Set<VertexId>([vertex, ...ring1])
   let best = 0
@@ -246,7 +246,7 @@ export function bestSetupRoadEdge(
   state: Pick<CatanState, 'board' | 'buildings' | 'roads'>,
   settlement: VertexId,
 ): EdgeId | null {
-  const topo = standardTopology()
+  const topo = topologyFor(state.board)
   let best: EdgeId | null = null
   let bestScore = -1
   for (const e of topo.vertexEdges[settlement] ?? []) {
@@ -282,7 +282,7 @@ export function bestVertex(state: Pick<CatanState, 'board'>, candidates: readonl
  * Otherwise hold it: the ensuing moveRobber would be pointless or self-harmful.
  */
 export function knightHelps(state: CatanState, seat: PlayerId): boolean {
-  const topo = standardTopology()
+  const topo = topologyFor(state.board)
   const blocksUs = (topo.hexVertices[state.board.robber] ?? []).some((v) => state.buildings[v]?.owner === seat)
   if (blocksUs) return true
   return state.board.hexes.some((h) => {
@@ -340,7 +340,7 @@ export function companionIntent(
         const s = robberHexScore(state, seat, key)
         if (s > bestScore) { bestKey = key; bestScore = s }
       }
-      const topo = standardTopology()
+      const topo = topologyFor(state.board)
       const hex = state.board.hexes.find((h) => coordKey(h.coord) === bestKey)
       if (!hex) return null
       const victims = state.players

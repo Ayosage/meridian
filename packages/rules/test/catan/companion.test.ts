@@ -6,7 +6,7 @@ import {
   COMPANION_DEFAULTS, createCatanGame, createRng, frontierPips, greedyDiscard, isCatanRuleError,
   legalCityVertices,
   legalRoadEdges, legalSettlementVertices, missingForGoal, pips, proposalPlan, publicVp, RESOURCES,
-  robberHexScore, standardTopology, vertexDiversity, vertexPips as vp, vertexPips,
+  robberHexScore, spiralCoords, standardTopology, vertexDiversity, vertexPips as vp, vertexPips,
   type CatanState, type DevCard, type HexTile, type ResourceCount,
 } from '../../src/index'
 import { die, inMain, mustApply, setupComplete, stubRng, withResources } from './helpers'
@@ -279,6 +279,16 @@ describe('companion placement tiebreaks', () => {
     return (topo.hexVertices[a] ?? []).filter((v) => (topo.hexVertices[b] ?? []).includes(v))
   }
 
+  /** Pad a sparse synthetic board to 19 hexes with inert desert fillers so topologyFor resolves radius 2. */
+  function pad(hexes: HexTile[]): HexTile[] {
+    const used = new Set(hexes.map((h) => coordKey(h.coord)))
+    const fillers = spiralCoords()
+      .filter((c) => !used.has(coordKey(c)))
+      .slice(0, 19 - hexes.length)
+      .map((coord) => ({ coord, terrain: 'desert' as const, token: null }))
+    return [...hexes, ...fillers]
+  }
+
   it('vertexDiversity counts distinct producing terrains, ignoring desert and off-board parts', () => {
     const hexes: HexTile[] = [
       { coord: { q: 0, r: 0 }, terrain: 'fields', token: 6 },
@@ -299,7 +309,7 @@ describe('companion placement tiebreaks', () => {
     // A lone 8-hex: from corner 0, corners 2 and 4 are the on-board frontier (5 pips each);
     // corner 1/5 are direct neighbors (sterilized by the placement) and never count.
     const hexes: HexTile[] = [{ coord: { q: 0, r: 0 }, terrain: 'fields', token: 8 }]
-    const board = { hexes, ports: [], robber: 'off' }
+    const board = { hexes: pad(hexes), ports: [], robber: 'off' }
     const v = vertexId({ q: 0, r: 0 }, 0)
     expect(frontierPips({ board, buildings: {} }, v)).toBe(5)
     // occupying both on-hex frontier corners leaves only off-board frontier: 0
@@ -323,7 +333,7 @@ describe('companion placement tiebreaks', () => {
       { coord: { q: -1, r: 0 }, terrain: 'pasture', token: 9 },
       { coord: { q: -2, r: 1 }, terrain: 'forest', token: 6 },
     ]
-    const state = { board: { hexes, ports: [], robber: 'off' }, buildings: {} }
+    const state = { board: { hexes: pad(hexes), ports: [], robber: 'off' }, buildings: {} }
     const topo = standardTopology()
     const vA = vertexId({ q: 2, r: -2 }, 0)
     expect(vertexPips(state, vA)).toBe(5)
@@ -344,7 +354,7 @@ describe('companion placement tiebreaks', () => {
       { coord: { q: 0, r: 0 }, terrain: 'fields', token: 8 },
       { coord: { q: 1, r: -2 }, terrain: 'forest', token: 6 },
     ]
-    const state = { board: { hexes, ports: [], robber: 'off' }, buildings: {}, roads: {} }
+    const state = { board: { hexes: pad(hexes), ports: [], robber: 'off' }, buildings: {}, roads: {} }
     const topo = standardTopology()
     // pick the A-corner with the widest spread of onward scores among its edges
     let settlement = ''
