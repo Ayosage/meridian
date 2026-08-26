@@ -8,9 +8,11 @@ export function WaitingRoom() {
   const connected = useCatanStore((s) => s.connected)
   const targetPlayers = useCatanStore((s) => s.targetPlayers)
   const botCount = useCatanStore((s) => s.botCount)
+  const seatNames = useCatanStore((s) => s.seatNames)
 
   const isHost = seat === 0
-  const canStartEarly = isHost && seats.length === 3 && targetPlayers === 4 && botCount === 0
+  const canStartEarly =
+    isHost && seats.length >= 3 && targetPlayers !== null && seats.length === targetPlayers - 1 && botCount === 0
   const humanTarget = (targetPlayers ?? 0) - botCount
 
   return (
@@ -23,7 +25,7 @@ export function WaitingRoom() {
         {seats.map((_, i) => (
           <li key={i}>
             <span className={`dot ${connected[i] ? 'connected' : 'disconnected'}`} />
-            Player {i + 1}
+            {seatNames[i] ?? `Player ${i + 1}`}
             {i === seat ? ' (you)' : ''}
           </li>
         ))}

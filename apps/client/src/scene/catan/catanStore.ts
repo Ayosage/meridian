@@ -262,6 +262,8 @@ interface CatanState {
   /** Lobby roster (waiting room), sessionIds by seat. */
   seats: string[]
   connected: boolean[]
+  /** Cosmetic pre-labels from a Discord launch; seat i shows seatNames[i] when present. */
+  seatNames: string[]
   targetPlayers: number | null
   /** Reserved bot seats (server appends bot players at match start; empty during 'waiting'). */
   botCount: number
@@ -294,7 +296,7 @@ interface CatanState {
   setStatus(status: CatanStatus): void
   setJoined(roomId: string): void
   setSeat(seat: number): void
-  setLobby(seats: string[], connected: boolean[], targetPlayers: number, botCount: number): void
+  setLobby(seats: string[], connected: boolean[], targetPlayers: number, botCount: number, seatNames?: string[]): void
   ingestSnapshot(payload: CatanSnapshotPayload): void
   setMode(mode: Mode): void
   setToast(message: string | null): void
@@ -392,6 +394,7 @@ const INITIAL = {
   discardSelection: EMPTY_DISCARD,
   seats: [] as string[],
   connected: [] as boolean[],
+  seatNames: [] as string[],
   targetPlayers: null as number | null,
   botCount: 0,
   tradeOpen: false,
@@ -415,7 +418,7 @@ export const useCatanStore = create<CatanState>((set, get) => ({
   setStatus: (status) => set({ status }),
   setJoined: (roomId) => set({ roomId, status: 'waiting' }),
   setSeat: (seat) => set({ seat }),
-  setLobby: (seats, connected, targetPlayers, botCount) => set({ seats, connected, targetPlayers, botCount }),
+  setLobby: (seats, connected, targetPlayers, botCount, seatNames = []) => set({ seats, connected, targetPlayers, botCount, seatNames }),
 
   ingestSnapshot: (payload) => {
     const { view, seat, mode, discardSelection } = get()

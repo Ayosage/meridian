@@ -14,4 +14,6 @@ export class CatanLobbyState extends Schema {
   @type(['string']) seats = new ArraySchema<string>()
   /** per-seat presence — false means the pilot is driving (spec §4) */
   @type(['boolean']) connected = new ArraySchema<boolean>()
+  /** Cosmetic seat labels from a Discord launch (docs/DISCORD-LAUNCH.md), first-come first-named. */
+  @type(['string']) seatNames = new ArraySchema<string>()
 }

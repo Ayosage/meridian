@@ -27,6 +27,20 @@ describe('POST /matches over HTTP', () => {
     await room.leave()
   })
 
+  it('carries seatNames into the room lobby state', async () => {
+    const res = await fetch('http://127.0.0.1:2568/matches', {
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ players: 4, bots: 3, seatNames: ['Alice'] }),
+    })
+    expect(res.status).toBe(201)
+    const { code } = (await res.json()) as { code: string }
+    const room = await server.sdk.joinById<{ seatNames: string[] }>(code)
+    await new Promise((r) => setTimeout(r, 50))
+    expect(room.state.seatNames[0]).toBe('Alice')
+    await room.leave()
+  })
+
   it('401 without the token', async () => {
     const res = await fetch('http://127.0.0.1:2568/matches', {
       method: 'POST',

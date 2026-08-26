@@ -33,6 +33,8 @@ interface CreateOptions {
   seed?: number
   /** Created via POST /matches (docs/DISCORD-LAUNCH.md): expire if never started. */
   launched?: boolean
+  /** Cosmetic seat labels from a launch, validated by the endpoint handler. */
+  seatNames?: string[]
   /** TEST-ONLY: shortens the launched-room expiry window. */
   launchExpireMs?: number
   /** TEST-ONLY: forces the room rng to a scripted value list. */
@@ -82,6 +84,7 @@ export class CatanRoom extends Room<CatanLobbyState> {
     this.setState(new CatanLobbyState())
     this.state.targetPlayers = options.players
     this.state.botCount = bots
+    for (const name of options.seatNames ?? []) this.state.seatNames.push(name)
 
     this.onMessage(MSG.INTENT, (client, raw: unknown) => this.handleIntent(client, raw))
     this.onMessage(MSG.START, (client) => this.handleStart(client))

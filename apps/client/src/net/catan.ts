@@ -23,6 +23,7 @@ interface CatanLobbyClientState {
   seats: Iterable<string> & { indexOf(sessionId: string): number; length: number }
   connected: Iterable<boolean> & { length: number }
   botCount: number
+  seatNames: Iterable<string> & { length: number }
 }
 
 let client: Client | null = null
@@ -114,7 +115,7 @@ function enterRoom(r: Room<CatanLobbyClientState>): void {
   r.onStateChange((state) => {
     const seat = state.seats.indexOf(r.sessionId)
     if (seat !== -1 && store().seat !== seat) store().setSeat(seat)
-    store().setLobby(Array.from(state.seats), Array.from(state.connected), state.targetPlayers, state.botCount ?? 0)
+    store().setLobby(Array.from(state.seats), Array.from(state.connected), state.targetPlayers, state.botCount ?? 0, Array.from(state.seatNames ?? []))
     if (state.phase === 'waiting') store().setStatus('waiting')
   })
 
