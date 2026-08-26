@@ -63,6 +63,12 @@ export async function createCatanMatch(players: CatanPlayerCount, bots: number):
   enterRoom(await getClient().create<CatanLobbyClientState>('catan', options))
 }
 
+/** ?join=CODE from a launch link (docs/DISCORD-LAUNCH.md) — normalized room code, or null. */
+export function launchJoinCode(search: string): string | null {
+  const raw = new URLSearchParams(search).get('join')?.trim().toUpperCase() ?? ''
+  return /^[A-Z0-9]{1,12}$/.test(raw) ? raw : null
+}
+
 export async function joinCatanMatch(code: string): Promise<void> {
   useCatanStore.getState().setStatus('connecting')
   enterRoom(await getClient().joinById<CatanLobbyClientState>(code.toUpperCase()))

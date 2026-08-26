@@ -12,7 +12,7 @@ import { IncomingOffer } from './ui/IncomingOffer'
 import { DevCardStrip } from './ui/DevCardStrip'
 import { YearOfPlentyModal } from './ui/YearOfPlentyModal'
 import { MonopolyModal } from './ui/MonopolyModal'
-import { reconnectCatan } from './net/catan'
+import { joinCatanMatch, launchJoinCode, reconnectCatan } from './net/catan'
 import './ui/hud.css'
 
 export function App() {
@@ -20,7 +20,15 @@ export function App() {
   const view = useCatanStore((s) => s.view)
 
   useEffect(() => {
-    void reconnectCatan()
+    const code = launchJoinCode(window.location.search)
+    if (code) {
+      // a dead/expired code lands back in the Lobby ('error' renders it)
+      joinCatanMatch(code).catch(() => useCatanStore.getState().setStatus('error'))
+      // strip the param so a reload after the match doesn't rejoin a dead room
+      window.history.replaceState(null, '', window.location.pathname)
+    } else {
+      void reconnectCatan()
+    }
   }, [])
 
   if (status === 'idle' || status === 'connecting' || status === 'error') return <Lobby />
