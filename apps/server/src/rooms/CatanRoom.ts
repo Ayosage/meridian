@@ -31,6 +31,10 @@ interface CreateOptions {
   offerWindowMs?: number
   abandonMinutes?: number
   seed?: number
+  /** Created via POST /matches (docs/DISCORD-LAUNCH.md): expire if never started. */
+  launched?: boolean
+  /** TEST-ONLY: shortens the launched-room expiry window. */
+  launchExpireMs?: number
   /** TEST-ONLY: forces the room rng to a scripted value list. */
   rngScript?: number[]
   /** TEST-ONLY: lower victory-point target so seeded E2E matches finish fast. */
@@ -81,6 +85,14 @@ export class CatanRoom extends Room<CatanLobbyState> {
 
     this.onMessage(MSG.INTENT, (client, raw: unknown) => this.handleIntent(client, raw))
     this.onMessage(MSG.START, (client) => this.handleStart(client))
+
+    if (options.launched) {
+      const expireMs = typeof options.launchExpireMs === 'number' ? options.launchExpireMs : 30 * 60 * 1000
+      this.clock.setTimeout(() => {
+        // 'playing'/'ended' mean the lobby became a match — never expire those
+        if (this.state.phase === 'waiting') void this.disconnect()
+      }, expireMs)
+    }
   }
 
   onJoin(client: Client) {
