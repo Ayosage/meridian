@@ -20,7 +20,6 @@ import { GoldenHourRig, SkyBackdrop } from './rig'
  * Rig/water/post are promoted from the approved beauty slice (Task 8).
  */
 
-const WATER_SIZE = 28
 
 /**
  * Takes `hexes` directly (not `view`) so its identity is decoupled from the
@@ -32,7 +31,7 @@ const WATER_SIZE = 28
  * (see useStableBoard below) here, so this ShaderMaterial is built exactly
  * once per match, never recompiled.
  */
-function Water({ hexes }: { hexes: CatanBoardData['hexes'] }) {
+function Water({ hexes, size }: { hexes: CatanBoardData['hexes']; size: number }) {
   const mat = useMemo(() => {
     const centers = hexes.map((hex) => {
       const [x, , z] = coordToWorld(hex.coord)
@@ -46,7 +45,7 @@ function Water({ hexes }: { hexes: CatanBoardData['hexes'] }) {
   })
   return (
     <mesh material={mat} position={[0, WATER_Y, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[WATER_SIZE, WATER_SIZE]} />
+      <planeGeometry args={[size, size]} />
     </mesh>
   )
 }
@@ -201,12 +200,19 @@ export function CatanScene({ view }: { view: CatanClientState }) {
   // consumers); only board's identity is pinned above.
   const stableView = useMemo(() => ({ ...view, board }), [view, board])
   const tier = useRef(qualityTier()).current
+  // Size-aware presentation: the 37-hex board needs a higher rig, a longer
+  // orbit leash, and a wider ocean. Canvas `camera` is initial-only, which is
+  // fine — a room remount recreates the Canvas.
+  const big = board.hexes.length > 19
+  const cameraPos: [number, number, number] = big ? [0, 12.5, 11] : [0, 9, 8]
+  const maxDist = big ? 19 : 14
+  const waterSize = big ? 38 : 28
 
   return (
     <Canvas
       shadows
       dpr={[1, 2]}
-      camera={{ position: [0, 9, 8], fov: 42, near: 0.3, far: 100 }}
+      camera={{ position: cameraPos, fov: 42, near: 0.3, far: 100 }}
       gl={{ antialias: true, toneMappingExposure: 1.15 }}
     >
       <SkyBackdrop />
@@ -215,12 +221,12 @@ export function CatanScene({ view }: { view: CatanClientState }) {
       <Pieces view={stableView} />
       <PickLayer view={stableView} />
       <Highlights view={stableView} />
-      <Water hexes={board.hexes} />
+      <Water hexes={board.hexes} size={waterSize} />
       <OrbitControls
         target={[0, 0, 0]}
         enablePan={false}
         minDistance={6}
-        maxDistance={14}
+        maxDistance={maxDist}
         maxPolarAngle={Math.PI * 0.45}
       />
       <EffectComposer>

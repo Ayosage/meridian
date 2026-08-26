@@ -14,12 +14,24 @@ import { BuildBar } from '../../ui/BuildBar'
 import { DiscardModal } from '../../ui/DiscardModal'
 import { StealChooser } from '../../ui/StealChooser'
 
+/** ?radius=3 knob (same idiom as net/catan.ts numberParam) for the big-board preview. */
+function radiusParam(): 2 | 3 {
+  if (typeof window === 'undefined') return 2
+  return new URLSearchParams(window.location.search).get('radius') === '3' ? 3 : 2
+}
+
 /**
  * Local beginner-board view — no server, no room. Lets CatanScene's
  * terrain/piece/tint rendering be iterated on directly (dev-only, /board).
+ * ?radius=3 previews the 37-hex 5-8 player board (random layout — beginner
+ * exists only at radius 2).
  */
 function buildDemoView(): CatanClientState {
-  const state = createCatanGame({ playerCount: 4, layout: 'beginner' }, createRng(7))
+  const radius = radiusParam()
+  const state =
+    radius === 3
+      ? createCatanGame({ playerCount: 6 }, createRng(7))
+      : createCatanGame({ playerCount: 4, layout: 'beginner' }, createRng(7))
   const view = redactCatanState(state, 0)
   const center = { q: 0, r: 0 }
 
