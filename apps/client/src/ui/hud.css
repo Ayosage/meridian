@@ -101,6 +101,18 @@
 }
 .build-bar-btn.active { background: #2c6e8f; border-color: #7fc8e8; color: #fff; }
 .build-bar-btn:disabled { opacity: 0.4; cursor: default; }
+.build-cost {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  font-size: 10px;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.build-cost-item { display: inline-flex; align-items: center; gap: 2px; }
+.build-cost-item svg { width: 12px; height: 12px; }
 .mute-pill {
   align-self: center;
   padding: 6px 12px;
