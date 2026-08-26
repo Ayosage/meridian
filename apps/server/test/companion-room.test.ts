@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { boot, type ColyseusTestServer } from '@colyseus/testing'
 import appConfig from '../src/app.config'
 import { MSG, type CatanSnapshotPayload, type CatanClientIntent } from '@meridian/protocol'
-import { coordKey, legalSettlementVertices, standardTopology, vertexId, edgeId, type CatanClientState } from '@meridian/rules'
+import { coordKey, legalSettlementVertices, topologyFor, vertexId, edgeId, type CatanClientState } from '@meridian/rules'
 
 let server: ColyseusTestServer
 beforeAll(async () => { server = await boot(appConfig) })
@@ -56,7 +56,7 @@ function humanScriptIntent(view: CatanClientState): CatanClientIntent | null {
         const spots = legalSettlementVertices(view, seat, { setup: true })
         return { type: 'placeSetupSettlement', vertex: spots[0]! }
       }
-      const topo = standardTopology()
+      const topo = topologyFor(view.board)
       const settlement = t.setup!.lastSettlement!
       const edge = (topo.vertexEdges[settlement] ?? []).find((e) => view.roads[e] === undefined)!
       return { type: 'placeSetupRoad', edge }
@@ -64,7 +64,7 @@ function humanScriptIntent(view: CatanClientState): CatanClientIntent | null {
     case 'preRoll':
       return { type: 'rollDice' }
     case 'robber': {
-      const topo = standardTopology()
+      const topo = topologyFor(view.board)
       const hex = view.board.hexes.find((h) => coordKey(h.coord) !== view.board.robber)!.coord
       const key = coordKey(hex)
       const victims = view.players
@@ -330,5 +330,35 @@ describe('CatanRoom with native bots', () => {
     expect(sink2.at(-1)!.view.you.seat).toBe(0) // seat restored, snapshot arrived
 
     await waitFor(() => room.game!.seq > seqBeforeDrop) // bots resume driving
+  })
+})
+
+describe('8-player room smoke', () => {
+  it('players:8 bots:7 — the human joins, setup completes, the game reaches preRoll', async () => {
+    const c = await server.sdk.joinOrCreate('catan', { players: 8, bots: 7, ...FAST })
+    const sink: CatanSnapshotPayload[] = []
+    c.onMessage(MSG.SNAPSHOT, (p: CatanSnapshotPayload) => sink.push(p))
+    c.onMessage('*', () => undefined)
+    await settle()
+    const view = sink.at(-1)!.view
+    expect(view.playerCount).toBe(8)
+    expect(view.board.hexes).toHaveLength(37)
+    expect(view.turn.current).toBe(0) // human is host seat 0, acts first in setup
+    // place the human's two snake-draft picks as they come due; bots do the rest
+    const act = () => {
+      const v = sink.at(-1)!.view
+      if (v.turn.phase !== 'setup' || v.turn.current !== 0) return false
+      const intent = humanScriptIntent(v)
+      if (intent) c.send(MSG.INTENT, intent)
+      return false
+    }
+    await waitFor(() => {
+      act()
+      const v = sink.at(-1)!.view
+      return v.turn.phase !== 'setup' && Object.keys(v.buildings).length >= 16
+    })
+    const done = sink.at(-1)!.view
+    expect(Object.keys(done.buildings)).toHaveLength(16) // 8 seats x 2 settlements
+    expect(done.turn.phase).toBe('preRoll')
   })
 })
