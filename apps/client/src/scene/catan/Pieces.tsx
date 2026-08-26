@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import type { CatanBoard, CatanClientState, EdgeId, VertexId } from '@meridian/rules'
-import { edgeWorld, portWorld, vertexWorld, TILE_TOP } from './catanLayout'
+import { edgeWorld, portsEqual, portWorld, vertexWorld, TILE_TOP } from './catanLayout'
 import { RESOURCE_COLORS, seatColor } from './palette'
 import { PortSigns } from './PortSign'
 
@@ -131,7 +131,14 @@ function seededAngleJitter(key: string, maxRadians: number): number {
 function Ports({ board }: { board: CatanBoard }) {
   const portSrc = useSliceGltf('port')
   const vw = vertexWorld()
-  const placements = useMemo(() => portWorld(board, vw, PORT_PUSH), [board, vw])
+  // Every snapshot re-mints `board` (each robber move included) while its
+  // ports never change mid-match, and vw is module-cached — so key the memos
+  // on a content-stable ports reference, not on board identity, or the boats
+  // and sign placements rebuild on every robber move for nothing.
+  const portsRef = useRef(board.ports)
+  if (!portsEqual(portsRef.current, board.ports)) portsRef.current = board.ports
+  const ports = portsRef.current
+  const placements = useMemo(() => portWorld({ ports }, vw, PORT_PUSH), [ports, vw])
 
   const boats = useMemo(() => {
     const list: {
@@ -140,7 +147,7 @@ function Ports({ board }: { board: CatanBoard }) {
       rotation: [number, number, number]
       color: string | null
     }[] = []
-    board.ports.forEach((port, i) => {
+    ports.forEach((port, i) => {
       const p = placements[i]
       if (!p) return
       const baseAngle = Math.atan2(p.outX, p.outZ)
@@ -159,7 +166,7 @@ function Ports({ board }: { board: CatanBoard }) {
       }
     })
     return list
-  }, [board, placements, vw])
+  }, [ports, placements, vw])
 
   return (
     <>

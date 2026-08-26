@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { CatanEvent } from '@meridian/protocol'
 import { RESOURCES, type Resource } from '@meridian/rules'
 import { seatColor } from '../scene/catan/palette'
-import { useCatanStore } from '../scene/catan/catanStore'
+import { useCatanStore, type EventLogEntry } from '../scene/catan/catanStore'
 import { ResourceIcon } from './ResourceIcon'
 import './hud.css'
 
@@ -173,7 +173,7 @@ export function ActionLog() {
   return <ActionLogView eventLog={eventLog} seat={seat} />
 }
 
-export function ActionLogView({ eventLog, seat }: { eventLog: readonly CatanEvent[]; seat: number | null }) {
+export function ActionLogView({ eventLog, seat }: { eventLog: readonly EventLogEntry[]; seat: number | null }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -181,12 +181,11 @@ export function ActionLogView({ eventLog, seat }: { eventLog: readonly CatanEven
       <button type="button" className="action-log-header" data-testid="action-log-toggle" onClick={() => setOpen((o) => !o)}>
         Log {open ? '▾' : '▸'}
       </button>
-      {!open &&
-        eventLog.slice(0, TICKER_LINES).map((e, i) => <Line event={e} seat={seat} key={`${eventLog.length}-${i}`} />)}
+      {!open && eventLog.slice(0, TICKER_LINES).map((e) => <Line event={e.event} seat={seat} key={e.id} />)}
       {open && (
         <div className="action-log-panel" data-testid="action-log-panel">
-          {eventLog.map((e, i) => (
-            <Line event={e} seat={seat} key={`${eventLog.length}-${i}`} />
+          {eventLog.map((e) => (
+            <Line event={e.event} seat={seat} key={e.id} />
           ))}
         </div>
       )}

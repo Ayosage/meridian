@@ -8,6 +8,7 @@ import {
   die,
   isCatanRuleError,
   mustApply,
+  standardTopology,
   stubRng,
   subtractResources,
   SETUP_PLACEMENTS,
@@ -65,8 +66,12 @@ describe('deriveCatanEvents', () => {
 
   it('roll: names the resource a robber-blocked matching hex would have paid', () => {
     let s = setupComplete()
-    // park the robber on a token-6 hex, then roll a 6
-    const blocked = s.board.hexes.find((h) => h.token === 6)!
+    // park the robber on a token-6 hex somebody built on, then roll a 6
+    const topo = standardTopology()
+    const blocked = s.board.hexes.find(
+      (h) => h.token === 6 && (topo.hexVertices[`${h.coord.q},${h.coord.r}`] ?? []).some((v) => s.buildings[v]),
+    )!
+    expect(blocked).toBeDefined()
     s = { ...s, board: { ...s.board, robber: `${blocked.coord.q},${blocked.coord.r}` } }
     const { events } = eventsFor(s, { type: 'rollDice', player: s.turn.current }, stubRng([die(3), die(3)]))
     const roll = events.find((e) => e.kind === 'roll')!
@@ -74,6 +79,19 @@ describe('deriveCatanEvents', () => {
       expect(roll.robbed).toBeDefined()
       expect(roll.robbed!.length).toBeGreaterThan(0)
     }
+  })
+
+  it('roll: no robbed entry when the blocked hex had no buildings — nobody was deprived', () => {
+    let s = setupComplete()
+    const topo = standardTopology()
+    const blocked = s.board.hexes.find((h) => h.token === 6)!
+    // vacate the blocked hex's corners: its lost payout now deprives no one
+    const corners = new Set(topo.hexVertices[`${blocked.coord.q},${blocked.coord.r}`] ?? [])
+    const buildings = Object.fromEntries(Object.entries(s.buildings).filter(([v]) => !corners.has(v)))
+    s = { ...s, buildings, board: { ...s.board, robber: `${blocked.coord.q},${blocked.coord.r}` } }
+    const { events } = eventsFor(s, { type: 'rollDice', player: s.turn.current }, stubRng([die(3), die(3)]))
+    const roll = events.find((e) => e.kind === 'roll')!
+    if (roll.kind === 'roll') expect(roll.robbed).toBeUndefined()
   })
 
   it('bankTrade: reports the real rate paid', () => {

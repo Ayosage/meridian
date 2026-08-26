@@ -239,13 +239,21 @@ export function discardIntent(selection: DiscardSelection): CatanClientIntent {
   return { type: 'discard', resources }
 }
 
+/** One action-log entry: the server-derived event plus a monotonic id (stable React key). */
+export interface EventLogEntry {
+  id: number
+  event: CatanEvent
+}
+
 interface CatanState {
   status: CatanStatus
   roomId: string | null
   seat: number | null
   view: CatanClientState | null
   /** Action log: server-derived events, newest first, capped (ActionLog ticker). */
-  eventLog: readonly CatanEvent[]
+  eventLog: readonly EventLogEntry[]
+  /** Last id handed to an eventLog entry; ids only ever grow within a match. */
+  eventSeq: number
   toast: string | null
   winner: CatanMatchResult | null
   mode: Mode
@@ -376,7 +384,8 @@ const INITIAL = {
   roomId: null as string | null,
   seat: null as number | null,
   view: null as CatanClientState | null,
-  eventLog: [] as readonly CatanEvent[],
+  eventLog: [] as readonly EventLogEntry[],
+  eventSeq: 0,
   toast: null as string | null,
   winner: null as CatanMatchResult | null,
   mode: IDLE_MODE,
@@ -423,12 +432,21 @@ export const useCatanStore = create<CatanState>((set, get) => ({
     // staged selections are done with; a resolved/cancelled trade clears drafts.
     const ownOfferPosted = !hadOpenTrade && hasOpenTrade && payload.view.turn.current === seat
     const resetStaging = tradeResolved || ownOfferPosted
+    // Stamp arrivals in chronological order so ids grow with the events
+    // themselves, then prepend newest-first (entry keys must never shift as
+    // the log grows — ActionLog keys rows by id).
+    let eventSeq = get().eventSeq
     const eventLog = payload.events?.length
-      ? [...payload.events].reverse().concat(get().eventLog).slice(0, 100)
+      ? payload.events
+          .map((event) => ({ id: ++eventSeq, event }))
+          .reverse()
+          .concat(get().eventLog)
+          .slice(0, 100)
       : get().eventLog
     set({
       view: payload.view,
       eventLog,
+      eventSeq,
       mode: nextMode,
       status: payload.view.winner !== null ? 'ended' : 'playing',
       discardSelection: enteringDiscard ? EMPTY_DISCARD : discardSelection,

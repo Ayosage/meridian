@@ -1,6 +1,7 @@
 import {
   coordKey,
   RESOURCES,
+  standardTopology,
   TERRAIN_RESOURCE,
   totalResources,
   type CatanIntent,
@@ -50,16 +51,22 @@ export function deriveCatanEvents(
     case 'rollDice': {
       const dice = after.turn.dice!
       const total = dice[0] + dice[1]
-      // Why-nothing context: hexes matching the roll that the robber blocked,
-      // and resources denied by the bank-shortage rule (multi-claimant short
-      // bank pays nobody) — the two silent payout-eaters players ask about.
+      // Why-nothing context: hexes matching the roll where the robber blocked
+      // a payout somebody actually had a building on — an unoccupied blocked
+      // hex deprived no one and would only confuse the log. Bank-shortage
+      // non-payouts (multi-claimant short bank pays nobody) are the other
+      // silent payout-eater; the log does NOT explain those yet.
       const robbedHexes: Resource[] = []
       if (total !== 7) {
+        const topo = standardTopology()
         for (const hex of before.board.hexes) {
           if (hex.token !== total) continue
-          if (coordKey(hex.coord) !== before.board.robber) continue
+          const key = coordKey(hex.coord)
+          if (key !== before.board.robber) continue
           const res = TERRAIN_RESOURCE[hex.terrain]
-          if (res) robbedHexes.push(res)
+          if (!res) continue
+          const deprivedSomeone = (topo.hexVertices[key] ?? []).some((v) => before.buildings[v])
+          if (deprivedSomeone) robbedHexes.push(res)
         }
       }
       events.push({

@@ -84,7 +84,7 @@ export interface PortPlacement {
  * off the same math — only `push` differs between them.
  */
 export function portWorld(
-  board: CatanBoard,
+  board: Pick<CatanBoard, 'ports'>,
   vw: ReadonlyMap<VertexId, [number, number, number]>,
   push: number,
 ): PortPlacement[] {
@@ -107,4 +107,18 @@ export function portWorld(
     })
   })
   return out
+}
+
+/**
+ * Content equality for port lists. Snapshots re-mint the whole board object
+ * (robber moves included) while its ports never change mid-match; Pieces.tsx
+ * uses this to keep a stable ports reference so the boat/sign memos hold.
+ */
+export function portsEqual(a: CatanBoard['ports'], b: CatanBoard['ports']): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  return a.every((p, i) => {
+    const q = b[i]!
+    return p.kind === q.kind && p.vertices[0] === q.vertices[0] && p.vertices[1] === q.vertices[1]
+  })
 }

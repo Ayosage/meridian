@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { standardTopology, vertexId, edgeId, createCatanGame, createRng } from '@meridian/rules'
-import { vertexWorld, edgeWorld, portWorld, TILE_TOP } from '../src/scene/catan/catanLayout'
+import { vertexWorld, edgeWorld, portWorld, portsEqual, TILE_TOP } from '../src/scene/catan/catanLayout'
 import { coordToWorld } from '../src/scene/layout'
 
 describe('catanLayout', () => {
@@ -52,6 +52,20 @@ describe('catanLayout', () => {
     it('carries each port\'s kind through unchanged', () => {
       const placements = portWorld(board, vw, 0.35)
       expect(placements.map((p) => p.kind)).toEqual(board.ports.map((p) => p.kind))
+    })
+
+    it('portsEqual: true across a board re-mint with identical ports, false on any real change', () => {
+      const reminted = board.ports.map((p) => ({ ...p, vertices: [...p.vertices] as typeof p.vertices }))
+      expect(portsEqual(board.ports, reminted)).toBe(true)
+      expect(portsEqual(board.ports, board.ports.slice(1))).toBe(false)
+      const kindChanged = reminted.map((p, i) =>
+        i === 0 ? { ...p, kind: p.kind === 'generic' ? ('wood' as const) : ('generic' as const) } : p,
+      )
+      expect(portsEqual(board.ports, kindChanged)).toBe(false)
+      const vertexChanged = reminted.map((p, i) =>
+        i === 0 ? { ...p, vertices: [p.vertices[1], p.vertices[0]] as typeof p.vertices } : p,
+      )
+      expect(portsEqual(board.ports, vertexChanged)).toBe(false)
     })
 
     it('a larger push distance moves the sign farther from the board center', () => {

@@ -81,13 +81,32 @@ describe('store eventLog', () => {
     const s = () => useCatanStore.getState()
     s().ingestSnapshot(snap(1, [{ kind: 'buyDev', player: 0 }]))
     s().ingestSnapshot(snap(2, [{ kind: 'knight', player: 1 }]))
-    expect(s().eventLog.map((e) => e.kind)).toEqual(['knight', 'buyDev'])
+    expect(s().eventLog.map((e) => e.event.kind)).toEqual(['knight', 'buyDev'])
     s().ingestSnapshot(snap(3)) // no events: log untouched
     expect(s().eventLog).toHaveLength(2)
     for (let i = 0; i < 120; i++) s().ingestSnapshot(snap(4 + i, [{ kind: 'turnEnded', player: 0, turn: i }]))
     expect(s().eventLog).toHaveLength(100)
     s().reset()
     expect(s().eventLog).toHaveLength(0)
+  })
+
+  it('assigns monotonic ids that existing entries keep as the log grows (stable React keys)', () => {
+    const s = () => useCatanStore.getState()
+    s().ingestSnapshot(
+      snap(1, [
+        { kind: 'buyDev', player: 0 },
+        { kind: 'knight', player: 1 },
+      ]),
+    )
+    // chronological stamping: the newer event (front of the log) has the higher id
+    const [first, second] = s().eventLog
+    expect(first!.event.kind).toBe('knight')
+    expect(first!.id).toBeGreaterThan(second!.id)
+    s().ingestSnapshot(snap(2, [{ kind: 'turnEnded', player: 0, turn: 1 }]))
+    const after = s().eventLog
+    expect(after[0]!.id).toBeGreaterThan(first!.id)
+    // the earlier entries kept their ids — no wholesale key churn
+    expect(after.slice(1)).toEqual([first, second])
   })
 })
 
@@ -101,8 +120,8 @@ describe('ActionLog render', () => {
       <ActionLogView
         seat={0}
         eventLog={[
-          { kind: 'robber', player: 2, victim: 0, stolen: 'wheat' },
-          { kind: 'buyDev', player: 1 },
+          { id: 2, event: { kind: 'robber', player: 2, victim: 0, stolen: 'wheat' } },
+          { id: 1, event: { kind: 'buyDev', player: 1 } },
         ]}
       />,
     )
