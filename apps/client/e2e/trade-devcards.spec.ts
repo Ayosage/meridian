@@ -25,7 +25,7 @@ const SEED = 11
 // / legalTargetsOnScreen extensions) lives in src/dev/debugHooks.tsx.
 // The driver helpers (isEnabled/isVisible/tryClick/driveDiscard/
 // clickFirstClearTarget — the occlusion-aware click this spec introduced)
-// are shared with catan.spec.ts and tools/bots.mjs via e2e/driver.mjs.
+// are shared with catan.spec.ts via e2e/driver.mjs.
 
 // --- reading the HUD --------------------------------------------------------
 

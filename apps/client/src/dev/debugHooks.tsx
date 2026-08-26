@@ -21,8 +21,8 @@ interface MeridianDebug {
     targets: { kind: 'vertex' | 'edge' | 'hex'; id: string; x: number; y: number }[]
   }
   /**
-   * CatanScene-only — this seat's redacted snapshot + seat number, so the
-   * companion-bot driver (tools/bots.mjs) can weigh targets (pips, robber
+   * CatanScene-only — this seat's redacted snapshot + seat number, so
+   * external drivers (the E2E specs) can weigh targets (pips, robber
    * victims, trades) without reimplementing the client's networking. Only
    * what the seat may see (CatanClientState) — secrets never reach the hook.
    */

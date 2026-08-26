@@ -1,5 +1,5 @@
-// Hand-maintained declarations for driver.mjs (which stays plain JS so
-// tools/bots.mjs can run it under bare `node`). Keep in sync with driver.mjs.
+// Hand-maintained declarations for driver.mjs (plain JS). Keep in sync
+// with driver.mjs.
 import type { Locator, Page } from '@playwright/test'
 
 export declare const RESOURCES: readonly ['wood', 'brick', 'sheep', 'wheat', 'ore']

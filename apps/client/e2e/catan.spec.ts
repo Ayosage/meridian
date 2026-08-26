@@ -27,8 +27,8 @@ const SEED = 9
 // Global `window.__meridianDebug` typing (incl. CatanScene's catanRenderInfo
 // / legalTargetsOnScreen extensions) lives in src/dev/debugHooks.tsx.
 // isEnabled/isVisible/tryClick/driveDiscard/clickFirstClearTarget — the
-// driver helpers this spec, trade-devcards.spec.ts, and tools/bots.mjs all
-// share — live in e2e/driver.mjs.
+// driver helpers this spec and trade-devcards.spec.ts share — live in
+// e2e/driver.mjs.
 
 /**
  * One decision for one page, mirroring the engine's greedy bot priorities

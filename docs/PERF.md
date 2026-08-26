@@ -12,7 +12,8 @@ draw-call budget; no per-frame allocations.
 | FPS (desktop, dev build) | 60 | ~120 (display-refresh-capped at 120Hz; no dropped frames) |
 
 Method: `window.__meridianDebug.renderInfo()` (dev-only hook) read by
-`apps/client/e2e/match.spec.ts`; fps observed via a `requestAnimationFrame`
+`apps/client/e2e/match.spec.ts` (since removed with the placeholder
+ruleset); fps observed via a `requestAnimationFrame`
 counter sampled over 3s during an active match (dev build, `pnpm --filter
 client dev` + `pnpm --filter server start`), consistent with a brief manual
 check via browser devtools' performance panel — steady, no frame drops.

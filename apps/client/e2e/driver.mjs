@@ -1,8 +1,7 @@
-// Shared UI-driver helpers for everything that plays Catan through the real
-// client: the E2E specs (catan.spec.ts, trade-devcards.spec.ts) and the
-// companion-bot tool (tools/bots.mjs). Plain ESM JavaScript (not TS) because
-// tools/bots.mjs runs under bare `node`; the specs get types from the
-// hand-maintained declaration next door (driver.d.mts — keep it in sync).
+// Shared UI-driver helpers for the E2E specs that play Catan through the
+// real client (catan.spec.ts, trade-devcards.spec.ts). Plain ESM JavaScript
+// (not TS); the specs get types from the hand-maintained declaration next
+// door (driver.d.mts — keep it in sync).
 //
 // Deliberately NOT `import { RESOURCES } from '@meridian/rules'`: Playwright's
 // test loader (unlike Vite/Vitest/tsx) resolves that package via Node's
