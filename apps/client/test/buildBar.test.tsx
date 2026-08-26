@@ -26,12 +26,11 @@ describe('BuildBar cost labels', () => {
     for (const r of ['Wood', 'Brick', 'Wheat', 'Sheep']) expect(row).toContain(r)
   })
 
-  it('city: 3 ore + 2 wheat, with visible counts', () => {
+  it('city: one icon per unit — three ore, two wheat, no numerals', () => {
     const row = costRow(html, 'cost-city')
-    expect(row).toContain('Ore')
-    expect(row).toContain('Wheat')
-    expect(row).toContain('3')
-    expect(row).toContain('2')
+    expect(row.match(/aria-label="Ore"/g)).toHaveLength(3)
+    expect(row.match(/aria-label="Wheat"/g)).toHaveLength(2)
+    expect(row).not.toMatch(/>\s*[23]\s*</)
   })
 
   it('dev card: ore + wheat + sheep', () => {

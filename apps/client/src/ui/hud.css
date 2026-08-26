@@ -247,9 +247,10 @@
 }
 .catan-hud .roll-button:disabled { opacity: 0.4; cursor: default; }
 .catan-hud .hand-strip {
-  /* Sits above .build-bar (also bottom:18px/left:18px) so the two never overlap. */
+  /* Sits above .build-bar (also bottom:18px/left:18px) so the two never
+     overlap — the bar grew ~16px when cost rows landed under the labels. */
   position: absolute;
-  bottom: 74px;
+  bottom: 92px;
   left: 18px;
   display: flex;
   gap: 6px;
@@ -434,7 +435,7 @@
 .confirm-btn { padding: 6px 12px; font-size: 12px; font-family: inherit; border: 0; border-radius: 6px; background: #2c6e8f; color: #fff; cursor: pointer; }
 .dev-strip {
   position: fixed;
-  bottom: 138px;
+  bottom: 168px;
   left: 18px;
   display: flex;
   flex-direction: column;

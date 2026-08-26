@@ -14,16 +14,17 @@ const PIECES = [
   { kind: 'placeCity' as const, cost: 'city' as const, label: 'City', testId: 'build-city' },
 ]
 
-/** The action's price, straight from the rules' COSTS table — icons, with a count only when it isn't 1. */
+/** The action's price, straight from the rules' COSTS table — one icon per unit, like the physical cost card. */
 function CostRow({ cost }: { cost: keyof typeof COSTS }) {
   return (
     <span className="build-cost" data-testid={`cost-${cost}`}>
-      {RESOURCES.filter((r) => (COSTS[cost][r] ?? 0) > 0).map((r) => (
-        <span key={r} className="build-cost-item">
-          {(COSTS[cost][r] ?? 0) > 1 && `${COSTS[cost][r]} `}
-          <ResourceIcon r={r} />
-        </span>
-      ))}
+      {RESOURCES.flatMap((r) =>
+        Array.from({ length: COSTS[cost][r] ?? 0 }, (_, i) => (
+          <span key={`${r}${i}`} className="build-cost-item">
+            <ResourceIcon r={r} />
+          </span>
+        )),
+      )}
     </span>
   )
 }
