@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { coordKey, vertexId } from '../../src/index'
 import {
-  applyCatanIntent, bankTradePlan, bestConfirmPartner, buildGoal, companionIntent, COMPANION_DEFAULTS,
-  createCatanGame, createRng, greedyDiscard, isCatanRuleError, legalCityVertices, legalRoadEdges,
-  legalSettlementVertices, missingForGoal, pips, proposalPlan, publicVp, RESOURCES, robberHexScore,
-  standardTopology, vertexPips as vp, vertexPips,
-  type CatanState, type DevCard, type ResourceCount,
+  applyCatanIntent, bankTradePlan, bestConfirmPartner, bestVertex, buildGoal, companionIntent,
+  COMPANION_DEFAULTS, createCatanGame, createRng, greedyDiscard, isCatanRuleError, legalCityVertices,
+  legalRoadEdges, legalSettlementVertices, missingForGoal, pips, proposalPlan, publicVp, RESOURCES,
+  robberHexScore, standardTopology, vertexDiversity, vertexPips as vp, vertexPips,
+  type CatanState, type DevCard, type HexTile, type ResourceCount,
 } from '../../src/index'
 import { die, inMain, mustApply, setupComplete, stubRng, withResources } from './helpers'
 
@@ -254,6 +254,112 @@ describe('companion trade proposals', () => {
   })
 })
 
+/**
+ * SPIKE-safe main-phase state: the beginner layout (and every helper built on
+ * it) throws under the radius-3 board spike, so drive a seeded RANDOM game
+ * through setup with the companion itself, then force a non-7 roll into main.
+ */
+function randomInMain(seed: number): CatanState {
+  const rng = createRng(seed)
+  let state = createCatanGame({ playerCount: 4 }, rng)
+  while (state.turn.phase === 'setup') {
+    const intent = companionIntent(state, state.turn.current, rng)
+    expect(intent, `seed ${seed}: setup stalled`).not.toBeNull()
+    state = mustApply(state, intent!, rng)
+  }
+  return mustApply(state, { type: 'rollDice', player: state.turn.current }, stubRng([die(1), die(2)]))
+}
+
+describe('companion placement tiebreaks', () => {
+  /** Two adjacent hexes carrying the same token: their shared vertices score 2×pips. */
+  function sharedVertices(a: string, b: string): string[] {
+    const topo = standardTopology()
+    return (topo.hexVertices[a] ?? []).filter((v) => (topo.hexVertices[b] ?? []).includes(v))
+  }
+
+  it('vertexDiversity counts distinct producing terrains, ignoring desert and off-board parts', () => {
+    const hexes: HexTile[] = [
+      { coord: { q: 0, r: 0 }, terrain: 'fields', token: 6 },
+      { coord: { q: 1, r: -1 }, terrain: 'fields', token: 6 },
+      { coord: { q: -2, r: 0 }, terrain: 'fields', token: 6 },
+      { coord: { q: -1, r: -1 }, terrain: 'mountains', token: 6 },
+      { coord: { q: 2, r: 0 }, terrain: 'desert', token: null },
+    ]
+    const state = { board: { hexes, ports: [], robber: coordKey({ q: 2, r: 0 }) } }
+    const mono = sharedVertices('0,0', '1,-1')[0]!
+    const diverse = sharedVertices('-2,0', '-1,-1')[0]!
+    expect(vertexDiversity(state, mono)).toBe(1)
+    expect(vertexDiversity(state, diverse)).toBe(2)
+    expect(vertexPips(state, mono)).toBe(vertexPips(state, diverse)) // the tie the next test relies on
+  })
+
+  it('bestVertex breaks pip ties toward resource diversity, not list order', () => {
+    const hexes: HexTile[] = [
+      { coord: { q: 0, r: 0 }, terrain: 'fields', token: 6 },
+      { coord: { q: 1, r: -1 }, terrain: 'fields', token: 6 },
+      { coord: { q: -2, r: 0 }, terrain: 'fields', token: 6 },
+      { coord: { q: -1, r: -1 }, terrain: 'mountains', token: 6 },
+    ]
+    const state = { board: { hexes, ports: [], robber: coordKey({ q: 0, r: 0 }) } }
+    const mono = sharedVertices('0,0', '1,-1')[0]!
+    const diverse = sharedVertices('-2,0', '-1,-1')[0]!
+    // mono listed first: a first-wins tiebreak would pick it
+    expect(bestVertex(state, [mono, diverse])).toBe(diverse)
+    // strictly more pips still beats diversity: demote the diverse pair to 9 pips (5+4)
+    const demoted = {
+      board: {
+        ...state.board,
+        hexes: hexes.map((h) => (h.coord.q === -1 ? { ...h, token: 5 } : h)),
+      },
+    }
+    expect(vertexPips(demoted, diverse)).toBeLessThan(vertexPips(demoted, mono))
+    expect(bestVertex(demoted, [diverse, mono])).toBe(mono)
+  })
+
+  it('setup: the chosen vertex is pip-maximal and diversity-maximal among its pip ties', () => {
+    for (const seed of [1, 2, 3]) {
+      const rng = createRng(seed)
+      const state = createCatanGame({ playerCount: 4 }, rng)
+      const intent = companionIntent(state, state.turn.current, rng)!
+      expect(intent.type).toBe('placeSetupSettlement')
+      const chosen = (intent as { vertex: string }).vertex
+      for (const v of legalSettlementVertices(state, state.turn.current, { setup: true })) {
+        expect(vertexPips(state, chosen)).toBeGreaterThanOrEqual(vertexPips(state, v))
+        if (vertexPips(state, v) === vertexPips(state, chosen))
+          expect(vertexDiversity(state, chosen)).toBeGreaterThanOrEqual(vertexDiversity(state, v))
+      }
+    }
+  })
+})
+
+describe('companion knight judgment', () => {
+  it('plays a held knight when the robber squats on own production', () => {
+    let s = randomInMain(11)
+    const seat = s.turn.current
+    const ownVertex = Object.entries(s.buildings).find(([, b]) => b.owner === seat)![0]
+    const ownHexKey = ownVertex.split('|').find((p) => s.board.hexes.some((h) => coordKey(h.coord) === p))!
+    s = { ...s, board: { ...s.board, robber: ownHexKey } }
+    s = exactHand(s, seat, {}) // nothing affordable — the dev-card branch is reachable
+    s = withCard(s, seat, 'knight', 0)
+    const intent = companionIntent(s, seat, createRng(0))!
+    expect(intent).toMatchObject({ type: 'playDevCard', card: 'knight' })
+  })
+
+  it('holds the knight when the robber neither blocks us nor has a worthwhile target', () => {
+    let s = randomInMain(11)
+    const seat = s.turn.current
+    // strip every enemy building: no production anywhere worth blocking
+    const buildings = Object.fromEntries(Object.entries(s.buildings).filter(([, b]) => b.owner === seat))
+    const ownHexKeys = new Set(Object.keys(buildings).flatMap((v) => v.split('|')))
+    const awayHex = s.board.hexes.find((h) => !ownHexKeys.has(coordKey(h.coord)))!
+    s = { ...s, buildings, board: { ...s.board, robber: coordKey(awayHex.coord) } }
+    s = exactHand(s, seat, {})
+    s = withCard(s, seat, 'knight', 0)
+    const intent = companionIntent(s, seat, createRng(0))!
+    expect(intent).not.toMatchObject({ type: 'playDevCard', card: 'knight' })
+  })
+})
+
 describe('companion liveness', () => {
   it('4 companion seats finish seeded games; every intent legal; no nulls while the game waits', () => {
     for (const seed of [1, 2, 3]) {
@@ -383,8 +489,9 @@ function tallyRobberTargets(seeds: readonly number[]): Record<number, number> {
 describe('companion robber targeting (empirical)', () => {
   it('robs the current VP leader (among opponents) strictly more than the current last-place opponent', () => {
     const tally = tallyRobberTargets([1, 2, 3, 4, 5])
-    // eslint-disable-next-line no-console -- the user wants to SEE the tallies (task-14 brief)
-    console.log('robber target tally by opponent-VP-rank (1=leader..3=last):', tally)
+    if (process.env.ROBBER_TALLY)
+      // eslint-disable-next-line no-console -- opt-in diagnostics: ROBBER_TALLY=1 pnpm test prints the table
+      console.log('robber target tally by opponent-VP-rank (1=leader..3=last):', tally)
     expect(tally[1]).toBeGreaterThan(tally[3]!)
   })
 })

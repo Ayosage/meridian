@@ -183,15 +183,42 @@ export function bankTradePlan(state: CatanState, seat: PlayerId): { give: Resour
   return give ? { give, get } : null
 }
 
-/** Highest-pip vertex from a candidate list (first wins ties — stable, deterministic). */
-function bestVertex(state: CatanState, candidates: readonly VertexId[]): VertexId | null {
+/** Distinct producing terrains a vertex touches — the placement tiebreak (desert and off-board parts count 0). */
+export function vertexDiversity(state: Pick<CatanState, 'board'>, vertex: VertexId): number {
+  const kinds = new Set<string>()
+  for (const part of vertex.split('|')) {
+    const hex = state.board.hexes.find((h) => coordKey(h.coord) === part)
+    if (hex && hex.token !== null) kinds.add(hex.terrain)
+  }
+  return kinds.size
+}
+
+/** Highest-pip vertex from a candidate list; pip ties break toward resource diversity, then first-wins (stable, deterministic). */
+export function bestVertex(state: Pick<CatanState, 'board'>, candidates: readonly VertexId[]): VertexId | null {
   let best: VertexId | null = null
   let bestScore = -1
+  let bestDiversity = -1
   for (const v of candidates) {
     const s = vertexPips(state, v)
-    if (s > bestScore) { best = v; bestScore = s }
+    const d = vertexDiversity(state, v)
+    if (s > bestScore || (s === bestScore && d > bestDiversity)) { best = v; bestScore = s; bestDiversity = d }
   }
   return best
+}
+
+/**
+ * A knight is worth its once-per-turn dev slot when the robber squats on our
+ * own production, or some enemy hex is worth blocking (robberHexScore > 0).
+ * Otherwise hold it: the ensuing moveRobber would be pointless or self-harmful.
+ */
+export function knightHelps(state: CatanState, seat: PlayerId): boolean {
+  const topo = standardTopology()
+  const blocksUs = (topo.hexVertices[state.board.robber] ?? []).some((v) => state.buildings[v]?.owner === seat)
+  if (blocksUs) return true
+  return state.board.hexes.some((h) => {
+    const key = coordKey(h.coord)
+    return key !== state.board.robber && robberHexScore(state, seat, key) > 0
+  })
 }
 
 export function companionIntent(
@@ -290,7 +317,7 @@ function mainPhase(state: CatanState, seat: PlayerId, opts: CompanionOpts): Cata
 
   if (!t.devPlayed) {
     const playable = (card: string) => me.devCards.some((c) => c.card === card && c.boughtOnTurn < t.number)
-    if (playable('knight')) return { type: 'playDevCard', player: seat, card: 'knight' }
+    if (playable('knight') && knightHelps(state, seat)) return { type: 'playDevCard', player: seat, card: 'knight' }
     if (playable('roadBuilding') && me.roadsLeft > 0) {
       // the engine requires exactly `required` edges — a short snapshot means wait, not partial-play
       const required = Math.min(2, me.roadsLeft)
