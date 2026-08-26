@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createCatanGame, createRng, redactCatanState, type CatanClientState } from '@meridian/rules'
 import { deriveMode, useCatanStore, type Mode } from '../src/scene/catan/catanStore'
 
@@ -211,5 +211,49 @@ describe('useCatanStore', () => {
     expect(useCatanStore.getState().botCount).toBe(3)
     useCatanStore.getState().reset()
     expect(useCatanStore.getState().botCount).toBe(0)
+  })
+})
+
+describe('event-log filtering', () => {
+  beforeEach(() => {
+    useCatanStore.getState().reset()
+  })
+
+  it('drops trade declines from the log but keeps accepts and counters', () => {
+    const view = makeView({ seq: 1 })
+    useCatanStore.getState().ingestSnapshot({
+      seq: 1,
+      view,
+      events: [
+        { kind: 'tradeResponse', player: 1, response: 'reject' },
+        { kind: 'tradeResponse', player: 2, response: 'accept' },
+        { kind: 'tradeResponse', player: 3, response: 'counter' },
+        { kind: 'buyDev', player: 0 },
+      ],
+    })
+    const kinds = useCatanStore.getState().eventLog.map(({ event }) =>
+      event.kind === 'tradeResponse' ? `tradeResponse:${event.response}` : event.kind,
+    )
+    expect(kinds).not.toContain('tradeResponse:reject')
+    expect(kinds).toContain('tradeResponse:accept')
+    expect(kinds).toContain('tradeResponse:counter')
+    expect(kinds).toContain('buyDev')
+  })
+
+  it('writes a console verification line for each production roll event', () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    try {
+      const view = makeView({ seq: 1 })
+      useCatanStore.getState().ingestSnapshot({
+        seq: 1,
+        view,
+        events: [{ kind: 'roll', player: 0, dice: [2, 4], total: 6, gains: {} }],
+      })
+      expect(info).toHaveBeenCalledTimes(1)
+      expect(String(info.mock.calls[0]![0])).toContain('[meridian]')
+      expect(String(info.mock.calls[0]![0])).toContain('rolled 6')
+    } finally {
+      info.mockRestore()
+    }
   })
 })

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { rollConsoleReport } from './rollDebug'
 import type { CatanClientIntent, CatanEvent, CatanSnapshotPayload } from '@meridian/protocol'
 import {
   coordKey,
@@ -435,12 +436,22 @@ export const useCatanStore = create<CatanState>((set, get) => ({
     // staged selections are done with; a resolved/cancelled trade clears drafts.
     const ownOfferPosted = !hadOpenTrade && hasOpenTrade && payload.view.turn.current === seat
     const resetStaging = tradeResolved || ownOfferPosted
+    // Console-side verification trail for production rolls (demand vs bank
+    // arithmetic, denial math) — deliberately NOT in the UI log.
+    for (const event of payload.events ?? []) {
+      const report = rollConsoleReport(payload.view, event)
+      if (report) console.info(`[meridian] ${report.summary}`, report.resources)
+    }
     // Stamp arrivals in chronological order so ids grow with the events
     // themselves, then prepend newest-first (entry keys must never shift as
-    // the log grows — ActionLog keys rows by id).
+    // the log grows — ActionLog keys rows by id). Trade declines are noise
+    // in the ticker (every open offer collects them) — dropped here.
     let eventSeq = get().eventSeq
-    const eventLog = payload.events?.length
-      ? payload.events
+    const loggable = (payload.events ?? []).filter(
+      (e) => !(e.kind === 'tradeResponse' && e.response === 'reject'),
+    )
+    const eventLog = loggable.length
+      ? loggable
           .map((event) => ({ id: ++eventSeq, event }))
           .reverse()
           .concat(get().eventLog)
