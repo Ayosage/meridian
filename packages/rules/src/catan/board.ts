@@ -1,5 +1,5 @@
 import { add, coordKey, DIRECTIONS, neighbors, type Coord } from '../coord'
-import { BEGINNER_TERRAIN, PORT_SPECS, TERRAIN_POOL, TOKEN_SPIRAL } from './data'
+import { BEGINNER_TERRAIN, BOARD_SIZES, type BoardSize } from './data'
 import { shuffle, type Rng } from './rng'
 import { spiralCoords, vertexId, type VertexId } from './topology'
 import type { Resource, Terrain } from './types'
@@ -24,17 +24,17 @@ export interface CatanBoard {
   robber: string
 }
 
-function assignTokens(coords: readonly Coord[], terrains: readonly Terrain[]): HexTile[] {
+function assignTokens(coords: readonly Coord[], terrains: readonly Terrain[], tokens: readonly number[]): HexTile[] {
   let t = 0
   return coords.map((coord, i) => ({
     coord,
     terrain: terrains[i]!,
-    token: terrains[i] === 'desert' ? null : TOKEN_SPIRAL[t++]!,
+    token: terrains[i] === 'desert' ? null : tokens[t++]!,
   }))
 }
 
 /** Returns a problem description, or null when the board is valid. */
-export function validateBoard(hexes: readonly HexTile[]): string | null {
+export function validateBoard(hexes: readonly HexTile[], size: BoardSize = BOARD_SIZES[2]): string | null {
   const byKey = new Map(hexes.map((h) => [coordKey(h.coord), h]))
   const counts = new Map<Terrain, number>()
   const tokens: number[] = []
@@ -54,21 +54,21 @@ export function validateBoard(hexes: readonly HexTile[]): string | null {
       }
     }
   }
-  for (const t of new Set(TERRAIN_POOL)) {
-    const expected = TERRAIN_POOL.filter((x) => x === t).length
+  for (const t of new Set(size.terrainPool)) {
+    const expected = size.terrainPool.filter((x) => x === t).length
     if ((counts.get(t) ?? 0) !== expected) return `terrain count mismatch for ${t}`
   }
   const sorted = [...tokens].sort((a, b) => a - b)
-  const expected = [...TOKEN_SPIRAL].sort((a, b) => a - b)
+  const expected = [...size.tokenPool].sort((a, b) => a - b)
   if (sorted.length !== expected.length || sorted.some((v, i) => v !== expected[i]))
     return 'token multiset mismatch'
   return null
 }
 
-function resolvePorts(coords: readonly Coord[]): Port[] {
+function resolvePorts(coords: readonly Coord[], size: BoardSize): Port[] {
   const land = new Set(coords.map(coordKey))
-  const outer = coords.slice(0, 12)
-  return PORT_SPECS.map((spec) => {
+  const outer = coords.slice(0, 6 * size.radius)
+  return size.portSpecs.map((spec) => {
     const hex = outer[spec.outerIndex]!
     const seaDirs = [0, 1, 2, 3, 4, 5].filter((d) => !land.has(coordKey(add(hex, DIRECTIONS[d]!))))
     const d = seaDirs[spec.seaEdgeOffset % seaDirs.length]!
@@ -79,20 +79,23 @@ function resolvePorts(coords: readonly Coord[]): Port[] {
 
 const MAX_RANDOM_ATTEMPTS = 1000
 
-export function generateBoard(rng: Rng, layout: 'beginner' | 'random' = 'random'): CatanBoard {
-  const coords = spiralCoords()
+export function generateBoard(rng: Rng, layout: 'beginner' | 'random' = 'random', radius: 2 | 3 = 2): CatanBoard {
+  const size = BOARD_SIZES[radius]
+  const coords = spiralCoords(radius)
   let hexes: HexTile[]
   if (layout === 'beginner') {
-    hexes = assignTokens(coords, BEGINNER_TERRAIN)
-    const err = validateBoard(hexes)
+    if (radius !== 2) throw new Error('beginner layout exists only for the radius-2 board')
+    hexes = assignTokens(coords, BEGINNER_TERRAIN, size.tokenPool)
+    const err = validateBoard(hexes, size)
     if (err) throw new Error(`beginner layout invalid: ${err}`)
   } else {
     let attempt = 0
     do {
       if (++attempt > MAX_RANDOM_ATTEMPTS) throw new Error('could not generate a valid random board')
-      hexes = assignTokens(coords, shuffle(rng, TERRAIN_POOL))
-    } while (validateBoard(hexes) !== null)
+      const tokens = size.spiralTokens ? size.tokenPool : shuffle(rng, size.tokenPool)
+      hexes = assignTokens(coords, shuffle(rng, size.terrainPool), tokens)
+    } while (validateBoard(hexes, size) !== null)
   }
   const desert = hexes.find((h) => h.terrain === 'desert')!
-  return { hexes, ports: resolvePorts(coords), robber: coordKey(desert.coord) }
+  return { hexes, ports: resolvePorts(coords, size), robber: coordKey(desert.coord) }
 }

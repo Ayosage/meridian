@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { coordKey } from '../../src/coord'
 import {
   BEGINNER_TERRAIN,
+  BOARD_SIZES,
   createRng,
   generateBoard,
   TERRAIN_POOL,
@@ -83,5 +85,34 @@ describe('generateBoard', () => {
     // graft an 8 next to an existing 8 at (2,0): its neighbor (2,-1) currently holds 10
     const broken = board.hexes.map((h) => (h.coord.q === 2 && h.coord.r === -1 ? { ...h, token: 8 } : h))
     expect(validateBoard(broken)).not.toBeNull()
+  })
+})
+
+describe('radius-3 board', () => {
+  it('generates 37 hexes, 11 ports, valid tokens, robber on the desert', () => {
+    const board = generateBoard(createRng(5), 'random', 3)
+    expect(board.hexes).toHaveLength(37)
+    expect(board.ports).toHaveLength(11)
+    expect(validateBoard(board.hexes, BOARD_SIZES[3])).toBeNull()
+    const desert = board.hexes.find((h) => h.terrain === 'desert')!
+    expect(board.robber).toBe(coordKey(desert.coord))
+  })
+
+  it('radius-3 terrain pool: 8/8/8 wood-sheep-wheat, 6/6 brick-ore, 1 desert', () => {
+    const pool = BOARD_SIZES[3].terrainPool
+    expect(pool).toHaveLength(37)
+    const count = (t: string) => pool.filter((x) => x === t).length
+    expect([count('forest'), count('pasture'), count('fields')]).toEqual([8, 8, 8])
+    expect([count('hills'), count('mountains'), count('desert')]).toEqual([6, 6, 1])
+  })
+
+  it('beginner layout refuses radius 3', () => {
+    expect(() => generateBoard(createRng(1), 'beginner', 3)).toThrow(/beginner/)
+  })
+
+  it('radius 2 defaults are byte-identical to before', () => {
+    const a = generateBoard(createRng(7), 'beginner')
+    const b = generateBoard(createRng(7), 'beginner', 2)
+    expect(a).toEqual(b)
   })
 })

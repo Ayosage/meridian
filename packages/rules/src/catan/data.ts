@@ -66,3 +66,59 @@ export const PORT_SPECS: readonly PortSpec[] = [
   { outerIndex: 10, seaEdgeOffset: 0, kind: 'ore' },
   { outerIndex: 11, seaEdgeOffset: 0, kind: 'generic' },
 ]
+
+export interface BoardSize {
+  radius: number
+  terrainPool: readonly Terrain[]
+  tokenPool: readonly number[]
+  portSpecs: readonly PortSpec[]
+  bankPerResource: number
+  devDeck: Readonly<Record<DevCard, number>>
+  /** Base-game tradition: tokens laid along the spiral. False = shuffled per attempt. */
+  spiralTokens: boolean
+}
+
+const TERRAIN_POOL_3: readonly Terrain[] = [
+  ...Array<Terrain>(8).fill('forest'),
+  ...Array<Terrain>(8).fill('pasture'),
+  ...Array<Terrain>(8).fill('fields'),
+  ...Array<Terrain>(6).fill('hills'),
+  ...Array<Terrain>(6).fill('mountains'),
+  'desert',
+]
+
+/** Outer ring at radius 3 has 18 hexes; 11 ports, official-5-6p flavored (extra sheep). */
+const PORT_SPECS_3: readonly PortSpec[] = [
+  { outerIndex: 0, seaEdgeOffset: 0, kind: 'generic' },
+  { outerIndex: 2, seaEdgeOffset: 0, kind: 'wood' },
+  { outerIndex: 3, seaEdgeOffset: 1, kind: 'generic' },
+  { outerIndex: 5, seaEdgeOffset: 0, kind: 'brick' },
+  { outerIndex: 7, seaEdgeOffset: 0, kind: 'sheep' },
+  { outerIndex: 8, seaEdgeOffset: 1, kind: 'generic' },
+  { outerIndex: 10, seaEdgeOffset: 0, kind: 'wheat' },
+  { outerIndex: 12, seaEdgeOffset: 0, kind: 'generic' },
+  { outerIndex: 13, seaEdgeOffset: 1, kind: 'ore' },
+  { outerIndex: 15, seaEdgeOffset: 0, kind: 'sheep' },
+  { outerIndex: 16, seaEdgeOffset: 1, kind: 'generic' },
+]
+
+export const BOARD_SIZES: Readonly<Record<2 | 3, BoardSize>> = {
+  2: {
+    radius: 2,
+    terrainPool: TERRAIN_POOL,
+    tokenPool: TOKEN_SPIRAL,
+    portSpecs: PORT_SPECS,
+    bankPerResource: BANK_PER_RESOURCE,
+    devDeck: DEV_DECK_COMPOSITION,
+    spiralTokens: true,
+  },
+  3: {
+    radius: 3,
+    terrainPool: TERRAIN_POOL_3,
+    tokenPool: [...TOKEN_SPIRAL, ...TOKEN_SPIRAL],
+    portSpecs: PORT_SPECS_3,
+    bankPerResource: 24,
+    devDeck: { knight: 20, vp: 5, roadBuilding: 3, yearOfPlenty: 3, monopoly: 3 },
+    spiralTokens: false,
+  },
+}
