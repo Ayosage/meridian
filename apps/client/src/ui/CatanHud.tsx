@@ -45,7 +45,7 @@ function DiceDisplay({ dice }: { dice: readonly [number, number] | null }) {
 
 function PlayerStrip({ view, seat, connected }: { view: CatanClientState; seat: number | null; connected: boolean[] }) {
   return (
-    <div className="opponent-strip">
+    <div className={view.players.length > 4 ? 'opponent-strip compact' : 'opponent-strip'}>
       {playerCards(view, seat, connected).map((c) => (
         <div
           className={c.isYou ? 'opponent-card you-card' : 'opponent-card'}

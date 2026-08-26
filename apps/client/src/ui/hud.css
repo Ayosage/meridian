@@ -281,6 +281,14 @@
   flex-direction: column;
   gap: 6px;
 }
+/* 5-8 player matches: shrink the cards so eight fit without scrolling. */
+.catan-hud .opponent-strip.compact { gap: 4px; }
+.catan-hud .opponent-strip.compact .opponent-card {
+  font-size: 10px;
+  padding: 4px 8px;
+  min-width: 120px;
+}
+.catan-hud .opponent-strip.compact .opponent-name { margin-bottom: 0; }
 
 /* Action log (Task 15): ticker under the player cards; header toggles history. */
 .action-log {

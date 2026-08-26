@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { CatanPlayerCount } from '@meridian/rules'
 import { createCatanMatch, joinCatanMatch } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
 import { WaitingRoom } from './WaitingRoom'
@@ -6,7 +7,7 @@ import { WaitingRoom } from './WaitingRoom'
 export function Lobby() {
   const status = useCatanStore((s) => s.status)
   const [code, setCode] = useState('')
-  const [players, setPlayers] = useState<3 | 4>(4)
+  const [players, setPlayers] = useState<CatanPlayerCount>(4)
   const [bots, setBots] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const maxBots = players - 1
@@ -30,25 +31,20 @@ export function Lobby() {
     <div className="lobby">
       <h1>Meridian</h1>
       <div className="players-choice">
-        <button
-          data-testid="players-3"
-          className={players === 3 ? 'selected' : undefined}
-          disabled={busy}
-          onClick={() => {
-            setPlayers(3)
-            setBots((b) => Math.min(b, 2))
-          }}
-        >
-          3 players
-        </button>
-        <button
-          data-testid="players-4"
-          className={players === 4 ? 'selected' : undefined}
-          disabled={busy}
-          onClick={() => setPlayers(4)}
-        >
-          4 players
-        </button>
+        {([3, 4, 5, 6, 7, 8] as const).map((n) => (
+          <button
+            key={n}
+            data-testid={`players-${n}`}
+            className={players === n ? 'selected' : undefined}
+            disabled={busy}
+            onClick={() => {
+              setPlayers(n)
+              setBots((b) => Math.min(b, n - 1))
+            }}
+          >
+            {n}
+          </button>
+        ))}
       </div>
       <div className="players-choice bots-choice">
         {Array.from({ length: maxBots + 1 }, (_, n) => (

@@ -51,3 +51,13 @@ describe('playerCards', () => {
     expect(cards).toHaveLength(4)
   })
 })
+
+describe('playerCards at 8 seats', () => {
+  it('returns 8 cards in seat order for an 8-player view', () => {
+    const state = createCatanGame({ playerCount: 8 }, createRng(1))
+    const view = { ...redactCatanState(state, 0) }
+    const cards = playerCards(view, 0, new Array(8).fill(true))
+    expect(cards).toHaveLength(8)
+    expect(cards.map((c) => c.seat)).toEqual([0, 1, 2, 3, 4, 5, 6, 7])
+  })
+})
