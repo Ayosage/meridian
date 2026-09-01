@@ -32,13 +32,13 @@ function usePulse(ref: React.RefObject<THREE.Mesh>) {
   })
 }
 
-/** Pulsing ring, flat on the ground — marks a legal vertex or robber-target hex. */
-function PulseRing({ position, color }: { position: readonly [number, number, number]; color: string }) {
+/** Pulsing filled dot, flat on the ground — marks a legal vertex or robber-target hex. */
+function PulseDot({ position, color }: { position: readonly [number, number, number]; color: string }) {
   const ref = useRef<THREE.Mesh>(null)
   usePulse(ref)
   return (
     <mesh ref={ref} position={[position[0], position[1] + Y_LIFT, position[2]]} rotation={[-Math.PI / 2, 0, 0]}>
-      <ringGeometry args={[0.14, 0.22, 24]} />
+      <circleGeometry args={[0.18, 24]} />
       <meshBasicMaterial color={color} transparent opacity={0.7} depthWrite={false} side={THREE.DoubleSide} />
     </mesh>
   )
@@ -81,7 +81,7 @@ export function Highlights({ view }: { view: CatanClientState }) {
       <group>
         {legalVerticesForMode(view, seat, mode).map((id) => {
           const pos = vw.get(id)
-          return pos ? <PulseRing key={id} position={pos} color={color} /> : null
+          return pos ? <PulseDot key={id} position={pos} color={color} /> : null
         })}
       </group>
     )
@@ -106,7 +106,7 @@ export function Highlights({ view }: { view: CatanClientState }) {
           .filter((hex) => coordKey(hex.coord) !== view.board.robber)
           .map((hex) => {
             const [x, , z] = coordToWorld(hex.coord)
-            return <PulseRing key={coordKey(hex.coord)} position={[x, TILE_TOP, z]} color={color} />
+            return <PulseDot key={coordKey(hex.coord)} position={[x, TILE_TOP, z]} color={color} />
           })}
       </group>
     )
