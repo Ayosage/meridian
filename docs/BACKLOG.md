@@ -214,6 +214,22 @@ four attempts.
   test:e2e` runs the whole suite beside a live playtest. Defaults unchanged;
   `reuseExistingServer: false` (commit `dcd95d8`) still fails loud on a
   collision. See README "Ports".
+- **Server Docker build — VERIFIED + FIXED (2026-09-02).** First real run
+  of `docker build -f apps/server/Dockerfile .` found the image crashing on
+  boot: `apps/server/tsconfig.json` extends `../../tsconfig.base.json`,
+  which the Dockerfile never copied, so tsx's esbuild transform silently
+  dropped the whole config (with `experimentalDecorators`) and the
+  @colyseus/schema decorators threw `Cannot read properties of undefined
+  (reading 'constructor')`. Fixed by copying `tsconfig.base.json`; added a
+  root `.dockerignore` so host `node_modules`/`.vite` caches never get
+  COPYed over the image's own install. Smoke-tested on port 2569 with
+  `LAUNCH_TOKEN=test`: `GET /__healthcheck` 200, `POST /matches` 201 with a
+  room code, 401 on a bad token, 422 on `players: 9`. Image is 518MB
+  (node:20-slim + full dev install, since `start` runs tsx); a
+  compile-then-prune stage would shrink it — not attempted. Fly deploy
+  itself still unverified (not logged in); note `fly.toml`'s
+  `dockerfile = "Dockerfile"` is resolved relative to the fly.toml, so
+  check flyctl uses the repo root as build context when the time comes.
 - **Server-side room-state persistence.** Reconnection today survives a
   *client* drop (via `allowReconnection` + in-memory `game` state) but not a
   *server* restart — a deploy or crash mid-match loses every room outright.
