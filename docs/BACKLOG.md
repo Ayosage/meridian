@@ -214,6 +214,15 @@ four attempts.
   test:e2e` runs the whole suite beside a live playtest. Defaults unchanged;
   `reuseExistingServer: false` (commit `dcd95d8`) still fails loud on a
   collision. See README "Ports".
+- **E2E `trade-devcards.spec.ts` broken since the bank-stock HUD line —
+  FIXED (2026-09-02).** Deterministic failure, not a flake: the spec's
+  `readHand` digit-stripped the whole `hand-<r>` cell, which since `4f58465`
+  also reads "bank 18", so an empty hand parsed as 18 cards and the driver
+  clicked a disabled trade button until timeout. `HandStrip` now exposes
+  `hand-value-<r>` and the reader uses it. Full suite (7 specs) green on
+  spare ports afterwards; one unrelated flake seen once in `bots.spec.ts`
+  (human's setup road click didn't land, bots never got the draft — the
+  occlusion class already noted under Companion bots), passed on rerun.
 - **Server Docker build — VERIFIED + FIXED (2026-09-02).** First real run
   of `docker build -f apps/server/Dockerfile .` found the image crashing on
   boot: `apps/server/tsconfig.json` extends `../../tsconfig.base.json`,
