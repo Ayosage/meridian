@@ -24,9 +24,10 @@ Docs: `docs/BRIEF.md` (pillars) · `docs/superpowers/specs/` (designs) ·
   count, share the join code, host early start), painted-miniature 3D board,
   click-to-build with legality glow, HUD/discard/steal/win UI. E2E
   (3-browser full match + perf snapshot): `pnpm --filter client test:e2e`
-  (requires `playwright install chromium`, and ports 5173/2567 free — the
+  (requires `playwright install chromium`, and its two ports free — the
   suite starts its own servers rather than reusing whatever is listening;
-  stop your dev servers first, or `lsof -ti:5173,2567 | xargs kill -9`).
+  either run it on spare ports (see Ports below) or stop your dev servers
+  first: `lsof -ti:5173,2567 | xargs kill -9`).
 
 ## Development
 
@@ -48,6 +49,25 @@ every face; `?tier=low` drops the ambient-occlusion pass on weak GPUs.
 
 The server owns all game state: clients send intents, receive per-seat
 redacted snapshots.
+
+### Ports
+
+Defaults are 2567 (server) and 5173 (client). Both are overridable so a
+second checkout, an agent's E2E run, and your own playtest can share one
+machine without fighting over ports:
+
+| env var       | applies to                      | default |
+| ------------- | ------------------------------- | ------- |
+| `PORT`        | server listen port; the dev client also dials `ws://localhost:$PORT` when set | 2567 |
+| `CLIENT_PORT` | Vite dev-server port (strict when set: a busy port fails, never drifts) | 5173 |
+| `VITE_SERVER_URL` | explicit client→server URL; wins over the `PORT`-derived one | `ws://localhost:2567` |
+
+    PORT=2568 pnpm --filter server dev                 # server on a spare port
+    PORT=2568 CLIENT_PORT=5174 pnpm --filter client dev  # client on 5174, dialing 2568
+    PORT=2568 CLIENT_PORT=5174 pnpm --filter client test:e2e   # E2E on spare ports
+
+The E2E config threads both values into the servers it spawns (and sets the
+server's `CLIENT_ORIGIN` to match), so one command line moves the whole run.
 
 ## Notes
 

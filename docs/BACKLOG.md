@@ -203,15 +203,17 @@ four attempts.
 
 ## Infra / follow-ups from the mute-toggle task (2026-08-25)
 
-- **Dev-server port collision footgun.** Fixed ports (5173 client, 2567
-  server) mean an agent's E2E run and a human's own `pnpm dev` fight over
-  the same ports (user hit `EADDRINUSE` plus a mid-game server loss on
-  2026-08-25). Consider env-var port overrides (`PORT`; client-side
-  `VITE_SERVER_URL` already exists) so an E2E run and a human playtester can
-  coexist on the same machine. Note `reuseExistingServer: false` (commit
-  `dcd95d8`) already turned the collision loud (a failed launch) instead of
-  silent (an E2E run quietly reusing, and interfering with, someone else's
-  server) — that's progress, but doesn't free up the port itself.
+- **Dev-server port collision footgun — DONE (2026-09-02).** Fixed ports
+  (5173 client, 2567 server) meant an agent's E2E run and a human's own
+  `pnpm dev` fought over the same ports (user hit `EADDRINUSE` plus a
+  mid-game server loss on 2026-08-25). Now: the server honours `PORT`
+  (already did), the Vite dev server honours `CLIENT_PORT` (strict port
+  when set) and dials `ws://localhost:$PORT` when `PORT` is set without an
+  explicit `VITE_SERVER_URL`, and `playwright.config.ts` threads both into
+  the servers it spawns — `PORT=2568 CLIENT_PORT=5174 pnpm --filter client
+  test:e2e` runs the whole suite beside a live playtest. Defaults unchanged;
+  `reuseExistingServer: false` (commit `dcd95d8`) still fails loud on a
+  collision. See README "Ports".
 - **Server-side room-state persistence.** Reconnection today survives a
   *client* drop (via `allowReconnection` + in-memory `game` state) but not a
   *server* restart — a deploy or crash mid-match loses every room outright.
