@@ -72,6 +72,9 @@ export function Lobby() {
           maxLength={4}
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !busy && code.length === 4) void withCatch(() => joinCatanMatch(code))
+          }}
           placeholder="CODE"
         />
         <button

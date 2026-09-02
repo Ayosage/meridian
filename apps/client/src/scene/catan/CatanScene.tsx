@@ -207,6 +207,7 @@ export function CatanScene({ view }: { view: CatanClientState }) {
   const cameraPos: [number, number, number] = big ? [0, 12.5, 11] : [0, 9, 8]
   const maxDist = big ? 19 : 14
   const waterSize = big ? 38 : 28
+  // (shadow frustum is sized alongside: the radius-3 board spans ~±6 units, past the ±5.5 default)
 
   return (
     <Canvas
@@ -216,10 +217,10 @@ export function CatanScene({ view }: { view: CatanClientState }) {
       gl={{ antialias: true, toneMappingExposure: 1.15 }}
     >
       <SkyBackdrop />
-      <GoldenHourRig />
+      <GoldenHourRig shadowExtent={big ? 8 : 5.5} />
       <CatanBoard board={board} />
       <Pieces view={stableView} />
-      <PickLayer view={stableView} />
+      <PickLayer hexes={board.hexes} />
       <Highlights view={stableView} />
       <Water hexes={board.hexes} size={waterSize} />
       <OrbitControls

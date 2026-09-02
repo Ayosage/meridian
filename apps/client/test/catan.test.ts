@@ -41,6 +41,8 @@ const fake = {
   createCalls: [] as { name: string; options: unknown }[],
   reconnectCalls: [] as string[],
   reconnectShouldFail: false,
+  /** Reject this many leading reconnect calls, then resolve (reload-race shape). */
+  reconnectFailFirst: 0,
 }
 
 vi.mock('colyseus.js', () => ({
@@ -54,7 +56,8 @@ vi.mock('colyseus.js', () => ({
     }
     reconnect(token: string) {
       fake.reconnectCalls.push(token)
-      if (fake.reconnectShouldFail) return Promise.reject(new Error('reconnect failed'))
+      if (fake.reconnectShouldFail || fake.reconnectCalls.length <= fake.reconnectFailFirst)
+        return Promise.reject(new Error('reconnect failed'))
       return Promise.resolve(fake.room)
     }
   },
@@ -73,10 +76,13 @@ beforeEach(() => {
   useCatanStore.getState().reset()
   tokenStorage.clearFor('ROOM1')
   tokenStorage.clearFor('stale-room')
+  tokenStorage.clearFor('flaky-room')
+  tokenStorage.clearFor('slow-room')
   fake.room = new FakeRoom()
   fake.createCalls = []
   fake.reconnectCalls = []
   fake.reconnectShouldFail = false
+  fake.reconnectFailFirst = 0
 })
 
 describe('catan net wiring', () => {
@@ -118,10 +124,33 @@ describe('catan net wiring', () => {
     tokenStorage.setFor('stale-room', 'stale-tok')
     fake.reconnectShouldFail = true
 
-    const ok = await reconnectCatan()
+    const ok = await reconnectCatan({ delayMs: 0 })
 
     expect(ok).toBe(false)
     expect(tokenStorage.getFor('stale-room')).toBeNull()
     expect(useCatanStore.getState().status).toBe('idle')
+  })
+
+  it('reconnectCatan retries before giving up (reload beats the server-side onLeave)', async () => {
+    tokenStorage.setFor('flaky-room', 'flaky-tok')
+    fake.reconnectShouldFail = true
+
+    const ok = await reconnectCatan({ attempts: 3, delayMs: 0 })
+
+    expect(ok).toBe(false)
+    expect(fake.reconnectCalls).toEqual(['flaky-tok', 'flaky-tok', 'flaky-tok'])
+  })
+
+  it('reconnectCatan succeeds on a later attempt and keeps the token', async () => {
+    tokenStorage.setFor('slow-room', 'slow-tok')
+    fake.reconnectFailFirst = 1 // first call bounces (onLeave not yet run server-side), second lands
+
+    const ok = await reconnectCatan({ attempts: 3, delayMs: 0 })
+
+    expect(ok).toBe(true)
+    expect(fake.reconnectCalls).toHaveLength(2)
+    // entered the (fake) room: its token is persisted under its own id, status left 'idle'
+    expect(tokenStorage.getFor('ROOM1')).toBe('tok-123')
+    expect(useCatanStore.getState().status).not.toBe('idle')
   })
 })

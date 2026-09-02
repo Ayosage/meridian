@@ -319,6 +319,8 @@
   background: rgba(44, 110, 143, 0.45);
 }
 .action-log-entry .log-seat { font-weight: 600; }
+/* Launch pre-labels can be long Discord names; keep a line to one row. */
+.action-log-entry .log-seat, .response-name, .opponent-name { overflow-wrap: anywhere; }
 .action-log-entry .log-res svg { width: 12px; height: 12px; vertical-align: -2px; }
 .action-log-panel {
   display: flex;
@@ -331,11 +333,10 @@
   background: rgba(12, 14, 20, 0.8);
   padding: 6px 12px;
   border-radius: 8px;
-  border-left: 3px solid transparent; /* seat color set inline */
   font-size: 12px;
   min-width: 160px;
 }
-.opponent-card.you-card { background: rgba(20, 28, 40, 0.9); border-top: 1px solid rgba(127, 200, 232, 0.35); border-right: 1px solid rgba(127, 200, 232, 0.35); border-bottom: 1px solid rgba(127, 200, 232, 0.35); }
+.opponent-card.you-card { background: rgba(20, 28, 40, 0.9); border: 1px solid rgba(127, 200, 232, 0.35); }
 .seat-swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
 .opponent-name { font-weight: 700; display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
 .opponent-stats { display: flex; gap: 8px; opacity: 0.85; font-variant-numeric: tabular-nums; }

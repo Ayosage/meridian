@@ -188,6 +188,16 @@ describe('useCatanStore', () => {
     expect(useCatanStore.getState().toast).toContain('NOT_PLAYING')
   })
 
+  it('repeating the same toast bumps toastSeq so the dismiss timer re-arms; clearing does not', () => {
+    const before = useCatanStore.getState().toastSeq
+    useCatanStore.getState().ruleError('NOT_PLAYING: match is not in progress')
+    useCatanStore.getState().ruleError('NOT_PLAYING: match is not in progress')
+    expect(useCatanStore.getState().toastSeq).toBe(before + 2)
+    useCatanStore.getState().setToast(null)
+    expect(useCatanStore.getState().toast).toBeNull()
+    expect(useCatanStore.getState().toastSeq).toBe(before + 2)
+  })
+
   it('setWinner marks status ended and records the result', () => {
     useCatanStore.getState().setWinner({ reason: 'win', winner: 3 })
     const s = useCatanStore.getState()

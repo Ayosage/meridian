@@ -19,6 +19,15 @@ export function publicVictoryPoints(view: CatanClientState, seat: number): numbe
   return vp
 }
 
+/**
+ * Display name for a seat: the Discord-launch pre-label when one was passed
+ * through (see CatanState.seatNames), else "Player N" (1-based — seats are
+ * 0-based internally and must never leak as-is into the UI).
+ */
+export function seatLabel(seatNames: readonly string[], seat: number): string {
+  return seatNames[seat] || `Player ${seat + 1}`
+}
+
 export interface PlayerCardModel {
   seat: number
   isYou: boolean
