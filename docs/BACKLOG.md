@@ -221,11 +221,17 @@ four attempts.
 
 ## Delta-review follow-ups (2026-08-25, pre-merge triage)
 
-- **Event-redaction leak-replay test (do soon).** `redactEventForSeat` is
-  fail-open (strips known secrets, passes the rest); every current field is
-  verified public, but a future event kind with a secret field leaks by
-  default. Add an events analogue of `redact-replay.test.ts` asserting a
-  bystander seat's events never carry fields outside a whitelist.
+- **Event-redaction leak-replay test — DONE (2026-09-02).**
+  `redactEventForSeat` is fail-open (strips known secrets, passes the rest);
+  `apps/server/test/events-redact-replay.test.ts` is the fail-closed
+  backstop: a per-kind bystander whitelist (`BYSTANDER_FIELDS`) is the source
+  of truth, so a new event kind or field fails the suite until it is
+  consciously ruled public. Replays the scripted-bot 4-seat games (seeds
+  1-3) plus companion-brain games at 4 seats (seeds 1-3) and 8 seats (seed
+  1, radius-3 board) via `simulateCompanionGame` (promoted from
+  `companion.test.ts` into `@meridian/rules`' `test-support.ts`), and
+  asserts every whitelisted kind was actually emitted — all 16 are. No leak
+  found; a mutation that stops stripping `stolen` fails both tests.
 - Action-log entry keys change wholesale as the log grows (cosmetic
   unmount/remount churn); a monotonic event id in the store would fix.
 - ~~`events.ts` roll comment overstates coverage~~ (2026-08-26: bank-shortage
@@ -234,8 +240,9 @@ four attempts.
   re-mint); keying Ports on `board.ports` would drop even that.
 - Reconnect carries no event backfill — log gaps silently (fine for an
   ephemeral ticker; revisit only if the log gains persistence).
-- Companion rules test prints its robber tally table on every suite run —
-  silence whenever convenient.
+- ~~Companion rules test prints its robber tally table on every suite run~~
+  (2026-09-02: already opt-in since `23e7030` — printed only under
+  `ROBBER_TALLY=1`; verified silent on a plain `pnpm test`).
 
 
 

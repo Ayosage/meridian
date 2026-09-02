@@ -6,7 +6,7 @@ import {
   COMPANION_DEFAULTS, createCatanGame, createRng, frontierPips, greedyDiscard, isCatanRuleError,
   legalCityVertices,
   legalRoadEdges, legalSettlementVertices, missingForGoal, pips, proposalPlan, publicVp, RESOURCES,
-  robberHexScore, spiralCoords, standardTopology, vertexDiversity, vertexPips as vp, vertexPips,
+  robberHexScore, simulateCompanionGame, spiralCoords, standardTopology, vertexDiversity, vertexPips as vp, vertexPips,
   type CatanState, type DevCard, type HexTile, type ResourceCount,
 } from '../../src/index'
 import { die, inMain, mustApply, setupComplete, stubRng, withResources } from './helpers'
@@ -449,48 +449,8 @@ describe('companion knight judgment', () => {
 })
 
 describe('companion liveness', () => {
-  /** Full companion-vs-companion game at any seat count; returns the final state. */
-  function simulateGame(playerCount: 3 | 4 | 5 | 6 | 7 | 8, seed: number, cap: number): CatanState {
-    const rng = createRng(seed)
-    let state = createCatanGame({ playerCount }, rng)
-    const seats = Array.from({ length: playerCount }, (_, s) => s)
-    let turnNumber = state.turn.number
-    let proposedThisTurn = seats.map(() => false)
-    let bankTradesThisTurn = seats.map(() => 0)
-    for (let i = 0; i < cap && state.winner === null; i++) {
-      if (state.turn.number !== turnNumber) {
-        turnNumber = state.turn.number
-        proposedThisTurn = seats.map(() => false)
-        bankTradesThisTurn = seats.map(() => 0)
-      }
-      let seat: number
-      let opts = COMPANION_DEFAULTS
-      if (state.turn.phase === 'discard') {
-        seat = Number(Object.keys(state.turn.pendingDiscards)[0]!)
-      } else if (state.turn.openTrade) {
-        const offer = state.turn.openTrade
-        const pending = seats.filter((s) => s !== state.turn.current && offer.responses[s] === undefined)
-        if (pending.length > 0) {
-          seat = pending[0]!
-        } else {
-          // every non-current seat has responded: mirror the room's deadline so the loop can't stall
-          seat = state.turn.current
-          opts = { proposedThisTurn: proposedThisTurn[seat]!, bankTradesThisTurn: bankTradesThisTurn[seat]!, resolveOfferNow: true }
-        }
-      } else {
-        seat = state.turn.current
-        opts = { proposedThisTurn: proposedThisTurn[seat]!, bankTradesThisTurn: bankTradesThisTurn[seat]!, resolveOfferNow: false }
-      }
-      const intent = companionIntent(state, seat, rng, opts)
-      expect(intent, `seed ${seed}: stalled at ${i}, phase ${state.turn.phase}`).not.toBeNull()
-      if (intent!.type === 'offerTrade') proposedThisTurn[seat] = true
-      if (intent!.type === 'bankTrade') bankTradesThisTurn[seat] = bankTradesThisTurn[seat]! + 1
-      const result = applyCatanIntent(state, intent!, rng)
-      if (isCatanRuleError(result)) throw new Error(`seed ${seed} seat ${seat}: ${result.code}: ${result.message}`)
-      state = result
-    }
-    return state
-  }
+  // the driver lives in src/catan/test-support.ts so apps/server's tests can replay games too
+  const simulateGame = simulateCompanionGame
 
   it('4 companion seats finish seeded games; every intent legal; no nulls while the game waits', () => {
     for (const seed of [1, 2, 3]) {
