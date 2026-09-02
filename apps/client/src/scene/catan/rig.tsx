@@ -58,7 +58,13 @@ export function SkyBackdrop() {
   )
 }
 
-export function GoldenHourRig() {
+/**
+ * @param shadowExtent half-width of the sun's orthographic shadow frustum.
+ * The default covers the radius-2 board (~±4.3 units plus ports); the
+ * radius-3 board reaches ~±6, so CatanScene widens it or the outer ring's
+ * shadows get clipped flat.
+ */
+export function GoldenHourRig({ shadowExtent = 5.5 }: { shadowExtent?: number } = {}) {
   const sun = useRef<THREE.DirectionalLight>(null)
   return (
     <>
@@ -72,10 +78,10 @@ export function GoldenHourRig() {
         shadow-mapSize={[2048, 2048]}
         shadow-radius={4}
         shadow-bias={-0.0004}
-        shadow-camera-left={-5.5}
-        shadow-camera-right={5.5}
-        shadow-camera-top={5.5}
-        shadow-camera-bottom={-5.5}
+        shadow-camera-left={-shadowExtent}
+        shadow-camera-right={shadowExtent}
+        shadow-camera-top={shadowExtent}
+        shadow-camera-bottom={-shadowExtent}
         shadow-camera-far={25}
       />
       {/* cool sky fill in the shadows */}

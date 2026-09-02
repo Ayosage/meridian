@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createCatanGame, createRng, redactCatanState, type CatanClientState } from '@meridian/rules'
-import { playerCards } from '../src/scene/catan/hudLogic'
+import { playerCards, seatLabel } from '../src/scene/catan/hudLogic'
 
 /** Real-engine view; you.devCards / turn overridable per test. */
 function makeView(overrides: {
@@ -59,5 +59,18 @@ describe('playerCards at 8 seats', () => {
     const cards = playerCards(view, 0, new Array(8).fill(true))
     expect(cards).toHaveLength(8)
     expect(cards.map((c) => c.seat)).toEqual([0, 1, 2, 3, 4, 5, 6, 7])
+  })
+})
+
+describe('seatLabel', () => {
+  it('is 1-based "Player N" when no launch name exists', () => {
+    expect(seatLabel([], 0)).toBe('Player 1')
+    expect(seatLabel([], 7)).toBe('Player 8')
+  })
+
+  it('prefers the launch pre-label and falls back past an empty one', () => {
+    expect(seatLabel(['Ada', '', 'Cy'], 0)).toBe('Ada')
+    expect(seatLabel(['Ada', '', 'Cy'], 1)).toBe('Player 2')
+    expect(seatLabel(['Ada', '', 'Cy'], 3)).toBe('Player 4')
   })
 })

@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { type CatanClientState } from '@meridian/rules'
 import { leaveCatanMatch, sendCatanIntent } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
-import { playerCards } from '../scene/catan/hudLogic'
+import { playerCards, seatLabel } from '../scene/catan/hudLogic'
 import { seatColor } from '../scene/catan/palette'
 import { ActionLog } from './ActionLog'
 import { DiceCanvas } from './DiceCanvas'
@@ -13,15 +13,22 @@ import { HandStrip } from './HandStrip'
 import './hud.css'
 
 function TurnBanner({ view, seat, connected }: { view: CatanClientState; seat: number | null; connected: boolean[] }) {
+  const seatNames = useCatanStore((s) => s.seatNames)
   const { current, phase } = view.turn
   const isYou = seat !== null && current === seat
   const isAutopilot = connected[current] === false
 
+  // Setup turns say what the board is waiting for: the forced placement
+  // has no button to discover, so a bare "Your turn" reads as a stall.
   const label = isYou
     ? phase === 'preRoll'
       ? 'Your turn — roll'
-      : 'Your turn'
-    : `Player ${current + 1}'s turn`
+      : phase === 'setup' && view.turn.setup
+        ? `Your turn — place a ${view.turn.setup.expect}`
+        : phase === 'robber'
+          ? 'Your turn — move the robber'
+          : 'Your turn'
+    : `${seatLabel(seatNames, current)}'s turn`
 
   return (
     <div className="turn-banner" data-testid="turn-banner">
@@ -44,6 +51,7 @@ function DiceDisplay({ dice }: { dice: readonly [number, number] | null }) {
 
 
 function PlayerStrip({ view, seat, connected }: { view: CatanClientState; seat: number | null; connected: boolean[] }) {
+  const seatNames = useCatanStore((s) => s.seatNames)
   return (
     <div className={view.players.length > 4 ? 'opponent-strip compact' : 'opponent-strip'}>
       {playerCards(view, seat, connected).map((c) => (
@@ -51,11 +59,10 @@ function PlayerStrip({ view, seat, connected }: { view: CatanClientState; seat: 
           className={c.isYou ? 'opponent-card you-card' : 'opponent-card'}
           key={c.seat}
           data-testid={c.isYou ? 'player-you' : `opponent-${c.seat}`}
-          style={{ borderLeftColor: seatColor(c.seat) }}
         >
           <div className="opponent-name">
             <span className="seat-swatch" style={{ background: seatColor(c.seat) }} />
-            {c.isYou ? 'You' : `Player ${c.seat + 1}`}
+            {c.isYou ? 'You' : seatLabel(seatNames, c.seat)}
             {c.autopilot && <span className="autopilot-badge">autopilot</span>}
           </div>
           <div className="opponent-stats">
@@ -72,13 +79,16 @@ function PlayerStrip({ view, seat, connected }: { view: CatanClientState; seat: 
 
 function Toast() {
   const toast = useCatanStore((s) => s.toast)
+  const toastSeq = useCatanStore((s) => s.toastSeq)
   const setToast = useCatanStore((s) => s.setToast)
 
+  // Keyed on toastSeq, not the text: two identical rule errors in a row must
+  // restart the 3s dismiss rather than letting the first timer close the second.
   useEffect(() => {
     if (!toast) return
     const t = setTimeout(() => setToast(null), 3000)
     return () => clearTimeout(t)
-  }, [toast, setToast])
+  }, [toast, toastSeq, setToast])
 
   if (!toast) return null
   return (
@@ -90,12 +100,13 @@ function Toast() {
 
 function WinOverlay({ view }: { view: CatanClientState }) {
   const seat = useCatanStore((s) => s.seat)
+  const seatNames = useCatanStore((s) => s.seatNames)
   if (view.winner === null) return null
   const isYou = view.winner === seat
   return (
     <div className="modal-backdrop">
       <div className="modal win-overlay" data-testid="win-overlay">
-        <div className="modal-title">{isYou ? 'You win!' : `Player ${view.winner + 1} wins`}</div>
+        <div className="modal-title">{isYou ? 'You win!' : `${seatLabel(seatNames, view.winner)} wins`}</div>
         {view.winnerVpCards !== null && view.winnerVpCards > 0 && (
           <div className="win-vp-cards">+{view.winnerVpCards} VP cards revealed</div>
         )}

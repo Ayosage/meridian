@@ -75,19 +75,38 @@ export async function joinCatanMatch(code: string): Promise<void> {
   enterRoom(await getClient().joinById<CatanLobbyClientState>(code.toUpperCase()))
 }
 
-/** Try to resume via a persisted token for any known room. Clears it if dead. */
-export async function reconnectCatan(): Promise<boolean> {
+export interface ReconnectOptions {
+  /** Total attempts before the token is declared dead. */
+  attempts?: number
+  /** Pause between attempts. */
+  delayMs?: number
+}
+
+/**
+ * Try to resume via a persisted token for any known room. Clears it if dead.
+ *
+ * Retries: on a page reload the new page's reconnect can reach the server
+ * before the OLD socket's close has been processed — CatanRoom only registers
+ * the token in `onLeave` (allowReconnection), so that first attempt bounces
+ * as "token invalid or expired" and, without a retry, the seat was handed to
+ * autopilot and the token thrown away (reproduced on every reload in Chromium).
+ */
+export async function reconnectCatan({ attempts = 3, delayMs = 400 }: ReconnectOptions = {}): Promise<boolean> {
   const saved = tokenStorage.getAny()
   if (!saved) return false
-  try {
-    useCatanStore.getState().setStatus('reconnecting')
-    enterRoom(await getClient().reconnect<CatanLobbyClientState>(saved.token))
-    return true
-  } catch {
-    tokenStorage.clearFor(saved.roomId)
-    useCatanStore.getState().setStatus('idle')
-    return false
+  useCatanStore.getState().setStatus('reconnecting')
+  for (let attempt = 1; ; attempt++) {
+    try {
+      enterRoom(await getClient().reconnect<CatanLobbyClientState>(saved.token))
+      return true
+    } catch {
+      if (attempt >= attempts) break
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
   }
+  tokenStorage.clearFor(saved.roomId)
+  useCatanStore.getState().setStatus('idle')
+  return false
 }
 
 export function sendCatanIntent(intent: CatanClientIntent): void {

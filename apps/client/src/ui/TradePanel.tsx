@@ -3,10 +3,11 @@ import { sendCatanIntent } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
 import { ResourceIcon } from './ResourceIcon'
 import { bankRates, offerResponsesFor, selectionTotal, type ResourceSelection } from '../scene/catan/tradeLogic'
+import { seatLabel } from '../scene/catan/hudLogic'
 import './hud.css'
 
-/** Chip list for one side of posted terms, e.g. "2 wood". */
-function TermChips({ terms }: { terms: Partial<Record<Resource, number>> }) {
+/** Chip list for one side of posted terms, e.g. "2 wood" (shared with IncomingOffer). */
+export function TermChips({ terms }: { terms: Partial<Record<Resource, number>> }) {
   return (
     <>
       {RESOURCES.filter((r) => (terms[r] ?? 0) > 0).map((r) => (
@@ -145,6 +146,7 @@ function Composer({ view, seat }: { view: CatanClientState; seat: number }) {
 function OfferReview({ view, seat }: { view: CatanClientState; seat: number }) {
   const confirmTradeWith = useCatanStore((s) => s.confirmTradeWith)
   const cancelOpenTrade = useCatanStore((s) => s.cancelOpenTrade)
+  const seatNames = useCatanStore((s) => s.seatNames)
   const responses = offerResponsesFor(view, seat)
   const offer = view.turn.openTrade
   if (!responses || !offer) return null
@@ -163,7 +165,7 @@ function OfferReview({ view, seat }: { view: CatanClientState; seat: number }) {
       <div className="response-rows">
         {responses.map((r) => (
           <div className="response-row" key={r.seat}>
-            <span className="response-name">Player {r.seat + 1}</span>
+            <span className="response-name">{seatLabel(seatNames, r.seat)}</span>
             <span className={`response-status ${r.kind}`}>
               {r.kind === 'waiting' && 'Waiting…'}
               {r.kind === 'accept' && 'Accepted'}

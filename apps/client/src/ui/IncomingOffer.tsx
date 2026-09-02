@@ -1,24 +1,10 @@
 import { useEffect } from 'react'
-import { RESOURCES, type Resource } from '@meridian/rules'
 import { sendCatanIntent } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
 import { canAcceptOffer, incomingOfferFor, shouldShowOfferBanner } from '../scene/catan/tradeLogic'
-import { ResourceIcon } from './ResourceIcon'
-import { StepperRow } from './TradePanel'
+import { seatLabel } from '../scene/catan/hudLogic'
+import { StepperRow, TermChips } from './TradePanel'
 import './hud.css'
-
-function TermChips({ terms }: { terms: Partial<Record<Resource, number>> }) {
-  return (
-    <>
-      {RESOURCES.filter((r) => (terms[r] ?? 0) > 0).map((r) => (
-        <span className="res-chip" key={r}>
-          <ResourceIcon r={r} />
-          {terms[r]} {r}
-        </span>
-      ))}
-    </>
-  )
-}
 
 /**
  * Responder's banner for the open offer (design spec §2): accept / counter /
@@ -40,6 +26,7 @@ export function IncomingOffer() {
   const decCounterGive = useCatanStore((s) => s.decCounterGive)
   const incCounterGet = useCatanStore((s) => s.incCounterGet)
   const decCounterGet = useCatanStore((s) => s.decCounterGet)
+  const seatNames = useCatanStore((s) => s.seatNames)
 
   // Unconditional (before any early return, per React's rules of hooks) so it
   // still runs on every snapshot even when the component itself renders null.
@@ -54,9 +41,9 @@ export function IncomingOffer() {
 
   return (
     <div className="offer-banner" data-testid="offer-banner">
-      <div className="title">Player {offer.from + 1} offers a trade</div>
+      <div className="title">{seatLabel(seatNames, offer.from)} offers a trade</div>
       {offer.responded ? (
-        <div className="trade-footnote">Response sent — waiting for Player {offer.from + 1}</div>
+        <div className="trade-footnote">Response sent — waiting for {seatLabel(seatNames, offer.from)}</div>
       ) : counterDraft !== null ? (
         <>
           <div className="section-label">You give</div>

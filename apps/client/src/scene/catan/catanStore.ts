@@ -256,6 +256,8 @@ interface CatanState {
   /** Last id handed to an eventLog entry; ids only ever grow within a match. */
   eventSeq: number
   toast: string | null
+  /** Bumps on every non-null setToast so the HUD's dismiss timer restarts even for a repeated message. */
+  toastSeq: number
   winner: CatanMatchResult | null
   mode: Mode
   /** Cards staged to discard while in `discard` mode; reset on entering it, and on submit. */
@@ -390,6 +392,7 @@ const INITIAL = {
   eventLog: [] as readonly EventLogEntry[],
   eventSeq: 0,
   toast: null as string | null,
+  toastSeq: 0,
   winner: null as CatanMatchResult | null,
   mode: IDLE_MODE,
   discardSelection: EMPTY_DISCARD,
@@ -474,20 +477,21 @@ export const useCatanStore = create<CatanState>((set, get) => ({
   },
 
   setMode: (mode) => set({ mode }),
-  setToast: (toast) => set({ toast }),
+  setToast: (toast) => set(toast === null ? { toast } : { toast, toastSeq: get().toastSeq + 1 }),
 
   ruleError: (message) => {
     const { view, seat, mode } = get()
+    const toastSeq = get().toastSeq + 1
     if (mode.kind === 'roadBuilding') {
-      set({ toast: message, mode: { kind: 'roadBuilding', staged: [] } })
+      set({ toast: message, toastSeq, mode: { kind: 'roadBuilding', staged: [] } })
       return
     }
     if (!PLACEMENT_KINDS.has(mode.kind)) {
-      set({ toast: message })
+      set({ toast: message, toastSeq })
       return
     }
     const stillForced = view !== null && isModeForced(view, seat)
-    set({ toast: message, mode: stillForced ? mode : IDLE_MODE })
+    set({ toast: message, toastSeq, mode: stillForced ? mode : IDLE_MODE })
   },
 
   setWinner: (winner) => set({ winner, status: 'ended' }),

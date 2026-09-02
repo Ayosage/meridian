@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import type { CatanEvent } from '@meridian/protocol'
 import { RESOURCES, type Resource } from '@meridian/rules'
 import { seatColor } from '../scene/catan/palette'
@@ -137,7 +137,19 @@ export function affectsSeat(event: CatanEvent, seat: number | null): boolean {
   }
 }
 
-function Line({ event, seat }: { event: CatanEvent; seat: number | null }) {
+/**
+ * Memoized: an entry's `event` object never changes once logged, so the
+ * open history panel (up to 100 lines) doesn't re-render on every snapshot.
+ */
+const Line = memo(function Line({
+  event,
+  seat,
+  seatNames,
+}: {
+  event: CatanEvent
+  seat: number | null
+  seatNames: readonly string[]
+}) {
   return (
     <div
       className={affectsSeat(event, seat) ? 'action-log-entry affects-you' : 'action-log-entry'}
@@ -154,13 +166,13 @@ function Line({ event, seat }: { event: CatanEvent; seat: number | null }) {
           )
         return (
           <span className="log-seat" key={i} style={{ color: seatColor(seg.seat) }}>
-            {seg.seat === seat ? 'You' : `P${seg.seat + 1}`}
+            {seg.seat === seat ? 'You' : seatNames[seg.seat] || `P${seg.seat + 1}`}
           </span>
         )
       })}
     </div>
   )
-}
+})
 
 const TICKER_LINES = 4
 
@@ -174,10 +186,19 @@ const TICKER_LINES = 4
 export function ActionLog() {
   const eventLog = useCatanStore((s) => s.eventLog)
   const seat = useCatanStore((s) => s.seat)
-  return <ActionLogView eventLog={eventLog} seat={seat} />
+  const seatNames = useCatanStore((s) => s.seatNames)
+  return <ActionLogView eventLog={eventLog} seat={seat} seatNames={seatNames} />
 }
 
-export function ActionLogView({ eventLog, seat }: { eventLog: readonly EventLogEntry[]; seat: number | null }) {
+export function ActionLogView({
+  eventLog,
+  seat,
+  seatNames = [],
+}: {
+  eventLog: readonly EventLogEntry[]
+  seat: number | null
+  seatNames?: readonly string[]
+}) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -185,11 +206,11 @@ export function ActionLogView({ eventLog, seat }: { eventLog: readonly EventLogE
       <button type="button" className="action-log-header" data-testid="action-log-toggle" onClick={() => setOpen((o) => !o)}>
         Log {open ? '▾' : '▸'}
       </button>
-      {!open && eventLog.slice(0, TICKER_LINES).map((e) => <Line event={e.event} seat={seat} key={e.id} />)}
+      {!open && eventLog.slice(0, TICKER_LINES).map((e) => <Line event={e.event} seat={seat} seatNames={seatNames} key={e.id} />)}
       {open && (
         <div className="action-log-panel" data-testid="action-log-panel">
           {eventLog.map((e) => (
-            <Line event={e.event} seat={seat} key={e.id} />
+            <Line event={e.event} seat={seat} seatNames={seatNames} key={e.id} />
           ))}
         </div>
       )}
