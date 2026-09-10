@@ -10,3 +10,8 @@ blob-report/
 
 # Blender auto-backups
 *.blend1
+
+# vercel
+.vercel/
+.vercel
+.env*

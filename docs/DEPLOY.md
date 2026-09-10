@@ -4,8 +4,12 @@ Two deployables: the Colyseus **server** (WebSockets + `POST /matches`) on
 Fly, and the static Vite **client** on Vercel. Both are free-tier. Nothing
 here costs money; if Fly or Vercel asks for a paid plan, stop and ask.
 
-Status: scaffolded and smoke-tested in Docker locally; **not yet deployed**.
-Interactive steps (Fly login, Vercel import, DNS) need Brandon.
+Status 2026-09-10: **client LIVE** at https://meridian-client-fawn.vercel.app
+(Vercel project `meridian-client`, team ayo-b-dev, root directory `apps/client`,
+GitHub repo connected so pushes to `main` redeploy; `VITE_SERVER_URL` set for
+Production and Preview). **Server not yet deployed**: needs `fly auth login`
+(interactive) and the steps in section 1. Until then the lobby renders but
+Create/Join cannot connect.
 
 ## 1. Server on Fly
 
@@ -17,7 +21,7 @@ fly auth login                         # opens the browser
 fly apps create meridian-server        # name is in apps/server/fly.toml
 fly secrets set -a meridian-server \
   LAUNCH_TOKEN="$(openssl rand -hex 32)" \
-  CLIENT_ORIGIN="https://<client-host>"   # the Vercel URL, no trailing slash
+  CLIENT_ORIGIN="https://meridian-client-fawn.vercel.app"
 ```
 
 Keep the generated `LAUNCH_TOKEN`: steward needs the same value as
@@ -51,12 +55,13 @@ game nights.
 
 ## 2. Client on Vercel
 
-One-time, in the Vercel dashboard: Add New Project → import
-`Ayosage/meridian` → **Root Directory** `apps/client` → framework Vite.
-`apps/client/vercel.json` supplies the install/build commands (they run
-`pnpm` from the repo root so workspace packages resolve) and the headers.
-Enable "Include source files outside of the Root Directory" (it is on by
-default for monorepos).
+Done 2026-09-10 from the CLI (project `meridian-client`, root directory
+`apps/client`, framework Vite, GitHub repo connected). `apps/client/vercel.json`
+supplies the install/build commands (they run `pnpm` from the repo root so
+workspace packages resolve) and the headers. The public URL is
+https://meridian-client-fawn.vercel.app (`meridian-client.vercel.app` belongs
+to someone else). Manual redeploy: `vercel deploy --prod --scope ayo-b-dev`
+from the repo root (the checkout is linked; `.vercel/` is gitignored).
 
 Environment variables (Production and Preview):
 
@@ -66,8 +71,8 @@ Environment variables (Production and Preview):
 
 Vite inlines it at build time, so changing it means a redeploy.
 
-Then set the server's `CLIENT_ORIGIN` secret to the Vercel production URL
-(step 1) so `POST /matches` returns join links on the right host.
+The server's `CLIENT_ORIGIN` secret must be `https://meridian-client-fawn.vercel.app`
+so `POST /matches` returns join links on the right host.
 
 ## 3. Smoke test after both are up
 
