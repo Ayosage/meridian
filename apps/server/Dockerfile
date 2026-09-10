@@ -23,6 +23,9 @@ COPY packages/rules packages/rules
 COPY packages/protocol packages/protocol
 COPY apps/server apps/server
 
+# Stamped by `fly deploy --build-arg GIT_SHA=...`; surfaces in GET /healthz.
+ARG GIT_SHA=dev
+ENV GIT_SHA=$GIT_SHA
 ENV NODE_ENV=production
 EXPOSE 2567
 CMD ["pnpm", "-C", "apps/server", "start"]

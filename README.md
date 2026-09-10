@@ -50,6 +50,11 @@ every face; `?tier=low` drops the ambient-occlusion pass on weak GPUs.
 The server owns all game state: clients send intents, receive per-seat
 redacted snapshots.
 
+### Deploy
+
+Server on Fly, client on Vercel: `docs/DEPLOY.md` (runbook, env, smoke
+test, rollback). `GET /healthz` reports the deployed version.
+
 ### Ports
 
 Defaults are 2567 (server) and 5173 (client). Both are overridable so a
