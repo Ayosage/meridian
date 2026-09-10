@@ -7,9 +7,12 @@ deliberately thin — one endpoint plus a join-URL format — so each side can
 be built and tested alone.
 
 Status 2026-08-26: Meridian half implemented (endpoint, ?join= client path,
-expiry, seatNames, container/fly scaffolding — deployment itself pending;
-docker build not yet verified locally, Docker was down). `players` accepts
-3..8 (the 8-player build landed first). Steward half pending.
+expiry, seatNames, container/fly scaffolding — deployment itself pending).
+`players` accepts 3..8 (the 8-player build landed first). Steward half
+pending. Update 2026-09-02: the server Docker image builds and runs locally
+(`docker build -f apps/server/Dockerfile .` from the repo root, 518MB);
+`GET /__healthcheck` (from @colyseus/tools) answers 200 and `POST /matches`
+returns a room code — see BACKLOG "Infra / follow-ups".
 
 ## The contract (v0)
 

@@ -6,7 +6,13 @@ WORKDIR /app
 RUN corepack enable
 
 # Workspace manifests first so dependency layers cache across source edits.
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+# tsconfig.base.json is load-bearing at RUNTIME, not just for tsc: the server
+# runs through tsx, whose esbuild transform reads apps/server/tsconfig.json —
+# which `extends` the root base. Without the base file the whole config is
+# dropped, `experimentalDecorators` with it, and the @colyseus/schema
+# decorators crash on boot ("Cannot read properties of undefined (reading
+# 'constructor')").
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
 COPY apps/server/package.json apps/server/
 COPY packages/rules/package.json packages/rules/
 COPY packages/protocol/package.json packages/protocol/

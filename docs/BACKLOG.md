@@ -203,15 +203,42 @@ four attempts.
 
 ## Infra / follow-ups from the mute-toggle task (2026-08-25)
 
-- **Dev-server port collision footgun.** Fixed ports (5173 client, 2567
-  server) mean an agent's E2E run and a human's own `pnpm dev` fight over
-  the same ports (user hit `EADDRINUSE` plus a mid-game server loss on
-  2026-08-25). Consider env-var port overrides (`PORT`; client-side
-  `VITE_SERVER_URL` already exists) so an E2E run and a human playtester can
-  coexist on the same machine. Note `reuseExistingServer: false` (commit
-  `dcd95d8`) already turned the collision loud (a failed launch) instead of
-  silent (an E2E run quietly reusing, and interfering with, someone else's
-  server) — that's progress, but doesn't free up the port itself.
+- **Dev-server port collision footgun — DONE (2026-09-02).** Fixed ports
+  (5173 client, 2567 server) meant an agent's E2E run and a human's own
+  `pnpm dev` fought over the same ports (user hit `EADDRINUSE` plus a
+  mid-game server loss on 2026-08-25). Now: the server honours `PORT`
+  (already did), the Vite dev server honours `CLIENT_PORT` (strict port
+  when set) and dials `ws://localhost:$PORT` when `PORT` is set without an
+  explicit `VITE_SERVER_URL`, and `playwright.config.ts` threads both into
+  the servers it spawns — `PORT=2568 CLIENT_PORT=5174 pnpm --filter client
+  test:e2e` runs the whole suite beside a live playtest. Defaults unchanged;
+  `reuseExistingServer: false` (commit `dcd95d8`) still fails loud on a
+  collision. See README "Ports".
+- **E2E `trade-devcards.spec.ts` broken since the bank-stock HUD line —
+  FIXED (2026-09-02).** Deterministic failure, not a flake: the spec's
+  `readHand` digit-stripped the whole `hand-<r>` cell, which since `4f58465`
+  also reads "bank 18", so an empty hand parsed as 18 cards and the driver
+  clicked a disabled trade button until timeout. `HandStrip` now exposes
+  `hand-value-<r>` and the reader uses it. Full suite (7 specs) green on
+  spare ports afterwards; one unrelated flake seen once in `bots.spec.ts`
+  (human's setup road click didn't land, bots never got the draft — the
+  occlusion class already noted under Companion bots), passed on rerun.
+- **Server Docker build — VERIFIED + FIXED (2026-09-02).** First real run
+  of `docker build -f apps/server/Dockerfile .` found the image crashing on
+  boot: `apps/server/tsconfig.json` extends `../../tsconfig.base.json`,
+  which the Dockerfile never copied, so tsx's esbuild transform silently
+  dropped the whole config (with `experimentalDecorators`) and the
+  @colyseus/schema decorators threw `Cannot read properties of undefined
+  (reading 'constructor')`. Fixed by copying `tsconfig.base.json`; added a
+  root `.dockerignore` so host `node_modules`/`.vite` caches never get
+  COPYed over the image's own install. Smoke-tested on port 2569 with
+  `LAUNCH_TOKEN=test`: `GET /__healthcheck` 200, `POST /matches` 201 with a
+  room code, 401 on a bad token, 422 on `players: 9`. Image is 518MB
+  (node:20-slim + full dev install, since `start` runs tsx); a
+  compile-then-prune stage would shrink it — not attempted. Fly deploy
+  itself still unverified (not logged in); note `fly.toml`'s
+  `dockerfile = "Dockerfile"` is resolved relative to the fly.toml, so
+  check flyctl uses the repo root as build context when the time comes.
 - **Server-side room-state persistence.** Reconnection today survives a
   *client* drop (via `allowReconnection` + in-memory `game` state) but not a
   *server* restart — a deploy or crash mid-match loses every room outright.
@@ -221,11 +248,17 @@ four attempts.
 
 ## Delta-review follow-ups (2026-08-25, pre-merge triage)
 
-- **Event-redaction leak-replay test (do soon).** `redactEventForSeat` is
-  fail-open (strips known secrets, passes the rest); every current field is
-  verified public, but a future event kind with a secret field leaks by
-  default. Add an events analogue of `redact-replay.test.ts` asserting a
-  bystander seat's events never carry fields outside a whitelist.
+- **Event-redaction leak-replay test — DONE (2026-09-02).**
+  `redactEventForSeat` is fail-open (strips known secrets, passes the rest);
+  `apps/server/test/events-redact-replay.test.ts` is the fail-closed
+  backstop: a per-kind bystander whitelist (`BYSTANDER_FIELDS`) is the source
+  of truth, so a new event kind or field fails the suite until it is
+  consciously ruled public. Replays the scripted-bot 4-seat games (seeds
+  1-3) plus companion-brain games at 4 seats (seeds 1-3) and 8 seats (seed
+  1, radius-3 board) via `simulateCompanionGame` (promoted from
+  `companion.test.ts` into `@meridian/rules`' `test-support.ts`), and
+  asserts every whitelisted kind was actually emitted — all 16 are. No leak
+  found; a mutation that stops stripping `stolen` fails both tests.
 - Action-log entry keys change wholesale as the log grows (cosmetic
   unmount/remount churn); a monotonic event id in the store would fix.
 - ~~`events.ts` roll comment overstates coverage~~ (2026-08-26: bank-shortage
@@ -234,8 +267,9 @@ four attempts.
   re-mint); keying Ports on `board.ports` would drop even that.
 - Reconnect carries no event backfill — log gaps silently (fine for an
   ephemeral ticker; revisit only if the log gains persistence).
-- Companion rules test prints its robber tally table on every suite run —
-  silence whenever convenient.
+- ~~Companion rules test prints its robber tally table on every suite run~~
+  (2026-09-02: already opt-in since `23e7030` — printed only under
+  `ROBBER_TALLY=1`; verified silent on a plain `pnpm test`).
 
 
 

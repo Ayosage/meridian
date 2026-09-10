@@ -12,7 +12,7 @@ export function HandStrip({ view }: { view: CatanClientState }) {
       {RESOURCES.map((r) => (
         <div className="hand-count" key={r} data-testid={`hand-${r}`}>
           <span className="hand-label"><ResourceIcon r={r} />{r}</span>
-          <span className="hand-value">{view.you.resources[r]}</span>
+          <span className="hand-value" data-testid={`hand-value-${r}`}>{view.you.resources[r]}</span>
           <span className="bank-value" data-testid={`bank-${r}`}>bank {view.bank[r]}</span>
         </div>
       ))}

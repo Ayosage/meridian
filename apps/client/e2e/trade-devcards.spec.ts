@@ -33,8 +33,11 @@ const SEED = 11
 async function readHand(page: Page): Promise<Record<Res, number>> {
   const out = {} as Record<Res, number>
   for (const r of RESOURCES) {
-    const text = await page.getByTestId(`hand-${r}`).textContent()
-    out[r] = Number(text!.replace(/\D+/g, ''))
+    // The value span only: the cell also carries the bank's stock ("bank 18")
+    // since 4f58465, so digit-stripping the whole cell read an empty hand as
+    // 18 cards and sent the driver clicking disabled trade buttons.
+    const text = await page.getByTestId(`hand-value-${r}`).textContent()
+    out[r] = Number(text!.trim())
   }
   return out
 }
