@@ -12,6 +12,18 @@ afterAll(async () => {
   await server.shutdown()
 })
 
+describe('GET /healthz', () => {
+  it('answers ok with a version and no caching', async () => {
+    const res = await fetch('http://127.0.0.1:2568/healthz')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('cache-control')).toBe('no-store')
+    const body = (await res.json()) as { ok: boolean; version: string; uptime: number }
+    expect(body.ok).toBe(true)
+    expect(typeof body.version).toBe('string')
+    expect(body.uptime).toBeGreaterThanOrEqual(0)
+  })
+})
+
 describe('POST /matches over HTTP', () => {
   it('creates a joinable room', async () => {
     const res = await fetch('http://127.0.0.1:2568/matches', {

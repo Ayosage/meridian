@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Test, typecheck, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm lint
+      - run: pnpm --filter client build
+
+  server-image:
+    name: Server image builds and answers /healthz
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f apps/server/Dockerfile -t meridian-server .
+      - name: Boot the image and probe it
+        run: |
+          docker run -d --rm --name meridian -p 2567:2567 -e LAUNCH_TOKEN=ci-token meridian-server
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:2567/healthz >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:2567/healthz
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:2567/matches -H 'Content-Type: application/json' -d '{"players":4}')
+          test "$code" = "401"
+          docker stop meridian

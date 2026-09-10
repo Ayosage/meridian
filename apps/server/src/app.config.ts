@@ -2,6 +2,7 @@ import config from '@colyseus/tools'
 import { matchMaker } from 'colyseus'
 import express from 'express'
 import { handleCreateMatch } from './launch'
+import { healthBody } from './health'
 import { MatchRoom } from './rooms/MatchRoom'
 import { CatanRoom } from './rooms/CatanRoom'
 
@@ -11,6 +12,12 @@ export default config({
     gameServer.define('catan', CatanRoom)
   },
   initializeExpress: (app) => {
+    // Liveness for the Fly http check, CI, and anyone curious what is deployed.
+    app.get('/healthz', (_req, res) => {
+      res.set('Cache-Control', 'no-store')
+      res.json(healthBody({ env: process.env, uptimeSeconds: () => process.uptime() }))
+    })
+
     // Discord-launch endpoint (docs/DISCORD-LAUNCH.md). Refuses everything
     // unless LAUNCH_TOKEN is set and matches.
     app.post('/matches', express.json(), async (req, res) => {

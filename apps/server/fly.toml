@@ -1,6 +1,7 @@
 # Fly app for the Meridian game server (WebSockets + POST /matches).
 # Deploy from the repo root: fly deploy -c apps/server/fly.toml
 # Secrets (never in this file): fly secrets set LAUNCH_TOKEN=... CLIENT_ORIGIN=...
+# Runbook: docs/DEPLOY.md
 app = "meridian-server"
 primary_region = "ewr"
 
@@ -9,6 +10,7 @@ primary_region = "ewr"
 
 [env]
   PORT = "2567"
+  NODE_ENV = "production"
 
 [[services]]
   internal_port = 2567
@@ -24,8 +26,21 @@ primary_region = "ewr"
   [[services.ports]]
     port = 80
     handlers = ["http"]
+    force_https = true
 
   [[services.tcp_checks]]
     interval = "30s"
     timeout = "5s"
     grace_period = "10s"
+
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+    method = "get"
+    path = "/healthz"
+    protocol = "http"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
