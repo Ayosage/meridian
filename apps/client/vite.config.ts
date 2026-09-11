@@ -8,7 +8,7 @@ import react from '@vitejs/plugin-react'
 //                silently drifting to the next one, which would break the
 //                URL the caller (Playwright, a teammate) was told to use.
 //   PORT         the game server's port; when set (and VITE_SERVER_URL is
-//                not), the dev client is pointed at ws://localhost:$PORT so
+//                not), the dev client is pointed at http://localhost:$PORT so
 //                one env var moves both halves. Only applies to `vite`
 //                serve, never to a production build.
 const clientPort = process.env.CLIENT_PORT ? Number(process.env.CLIENT_PORT) : undefined
@@ -18,7 +18,7 @@ export default defineConfig(({ command }) => ({
   plugins: [react()],
   ...(clientPort !== undefined ? { server: { port: clientPort, strictPort: true } } : {}),
   ...(command === 'serve' && serverPort !== undefined && !process.env.VITE_SERVER_URL
-    ? { define: { 'import.meta.env.VITE_SERVER_URL': JSON.stringify(`ws://localhost:${serverPort}`) } }
+    ? { define: { 'import.meta.env.VITE_SERVER_URL': JSON.stringify(`http://localhost:${serverPort}`) } }
     : {}),
   build: { outDir: 'dist' },
 }))

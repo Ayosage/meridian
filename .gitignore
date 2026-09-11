@@ -19,3 +19,9 @@ blob-report/
 # internal docs stay local (README.md is the only published doc)
 docs/
 .design-pass/
+
+# wrangler local secrets
+.dev.vars
+
+# wrangler dev state and dry-run output
+.wrangler/
