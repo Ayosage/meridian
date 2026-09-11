@@ -79,6 +79,18 @@ describe('handleCreateMatch', () => {
     expect((await handleCreateMatch('Bearer sekrit', { players: 4, callback: { url: 1 } }, d)).status).toBe(422)
   })
 
+  it('passes the host seat through and rejects a malformed one', async () => {
+    const d = deps()
+    await handleCreateMatch('Bearer sekrit', { players: 4, host: { seatToken: 'st_h', displayName: 'Hosty' } }, d)
+    expect(d.createRoom).toHaveBeenCalledWith('ABCD', {
+      players: 4,
+      bots: 0,
+      launched: true,
+      host: { seatToken: 'st_h', displayName: 'Hosty' },
+    })
+    expect((await handleCreateMatch('Bearer sekrit', { players: 4, host: { displayName: 'x' } }, d)).status).toBe(422)
+  })
+
   it('retries a taken code and gives up with 503 when none is free', async () => {
     let n = 0
     const d = deps({

@@ -73,7 +73,6 @@ export const catanAdapter: GameAdapter<CatanState, CatanClientIntent, CatanClien
     return { open: true, everyoneAnswered }
   },
   offerWindowMs: 10_000,
-  canStartEarly: (seated, target, bots) => bots === 0 && seated >= 3 && seated === target - 1,
   isEnded: (state) => state.winner !== null,
   winner: (state) => state.winner,
   result(state): Placement[] {

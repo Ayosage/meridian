@@ -12,6 +12,12 @@ describe('envelope', () => {
     expect(clientEnvelopeSchema.safeParse({ t: 'start', extra: 1 }).success).toBe(false)
     expect(clientEnvelopeSchema.safeParse({ t: 'nope' }).success).toBe(false)
   })
+  it('accepts the host configure message and rejects a malformed one', () => {
+    expect(clientEnvelopeSchema.safeParse({ t: 'configure', players: 4, bots: 1 }).success).toBe(true)
+    expect(clientEnvelopeSchema.safeParse({ t: 'configure', players: 4 }).success).toBe(false)
+    expect(clientEnvelopeSchema.safeParse({ t: 'configure', players: 'four', bots: 0 }).success).toBe(false)
+    expect(clientEnvelopeSchema.safeParse({ t: 'configure', players: 4, bots: -1 }).success).toBe(false)
+  })
   it('accepts the five server messages', () => {
     const ok = (m: unknown) => expect(serverEnvelopeSchema.safeParse(m).success).toBe(true)
     ok({ t: 'welcome', seat: 0, token: 'tok' })

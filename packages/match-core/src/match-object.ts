@@ -11,6 +11,8 @@ export interface CreateOptions {
   launched?: boolean
   seatNames?: string[]
   callback?: { url: string; token: string }
+  /** The launcher's host: whoever arrives with this seat token takes seat 0, even if others came first. */
+  host?: { seatToken: string; displayName?: string }
   clientOrigin: string
   /** Test-only knobs (delays, targetVp, layout); ignored unless env.TEST_KNOBS === '1'. */
   knobs?: Record<string, unknown>
@@ -166,6 +168,8 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
         createdAt: now,
         // seatNames from a launch pre-label seats in order as humans arrive
         seatNames: JSON.stringify(opts.seatNames ?? []),
+        hostSeatToken: opts.host?.seatToken ?? null,
+        hostDisplayName: opts.host?.displayName ?? null,
       })
       if (opts.launched) {
         const expireMs = typeof knobs.launchExpireMs === 'number' ? knobs.launchExpireMs : 30 * 60_000
@@ -242,6 +246,8 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
           return this.handleHello(ws, env.data)
         case 'start':
           return att ? this.handleStart(att.seat) : undefined
+        case 'configure':
+          return att ? this.handleConfigure(att.seat, env.data.players, env.data.bots) : undefined
         case 'intent':
           return att ? this.handleIntent(att.seat, env.data.intent) : undefined
       }
@@ -264,7 +270,10 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
       const humansWanted = meta.targetPlayers - meta.botCount
       if (seats.filter((s) => s.kind === 'human').length >= humansWanted)
         return this.send(ws, { t: 'error', code: 'FULL', message: 'match is full' })
-      const seat = seats.length
+      const hostToken = this.metaValue('hostSeatToken')
+      const isHost = !!hostToken && hello.seatToken === hostToken
+      const displayName = hello.displayName ?? (isHost ? this.metaValue('hostDisplayName') : null)
+      let seat = seats.length
       const token = crypto.randomUUID()
       this.ctx.storage.sql.exec(
         'INSERT INTO seats (seat, kind, token, seatToken, displayName, connected) VALUES (?, ?, ?, ?, ?, 1)',
@@ -272,10 +281,48 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
         'human',
         token,
         hello.seatToken ?? null,
-        hello.displayName ?? null,
+        displayName,
       )
+      if (isHost && seat !== 0) {
+        // The launcher's host owns seat 0: swap with whoever sat there and tell them their new seat.
+        this.ctx.storage.sql.exec('UPDATE seats SET seat = -1 WHERE seat = 0')
+        this.ctx.storage.sql.exec('UPDATE seats SET seat = 0 WHERE seat = ?', seat)
+        this.ctx.storage.sql.exec('UPDATE seats SET seat = ? WHERE seat = -1', seat)
+        for (const o of this.ctx.getWebSockets()) {
+          const a = this.attachment(o)
+          if (a?.seat === 0) {
+            o.serializeAttachment({ ...a, seat })
+            this.send(o, { t: 'welcome', seat, token: a.token })
+          }
+        }
+        seat = 0
+      }
       this.seatSocket(ws, seat, token, false)
       if (seats.length + 1 === humansWanted) this.startGame()
+    }
+
+    /** Host only, while waiting: resize the table. Starts the match if the seated humans now fill it. */
+    protected handleConfigure(seat: number, players: number, bots: number): void {
+      const meta = this.getMeta()!
+      if (seat !== 0)
+        return this.sendToSeat(seat, { t: 'error', code: 'NOT_HOST', message: 'Only the host can change the table.' })
+      if (meta.phase !== 'waiting')
+        return this.sendToSeat(seat, { t: 'error', code: 'NOT_WAITING', message: 'The match has already started.' })
+      const { min, max } = adapter.players
+      if (!Number.isInteger(players) || players < min || players > max)
+        return this.sendToSeat(seat, { t: 'error', code: 'BAD_CONFIG', message: `Players must be ${min} to ${max}.` })
+      if (!Number.isInteger(bots) || bots < 0 || bots > players - 1)
+        return this.sendToSeat(seat, { t: 'error', code: 'BAD_CONFIG', message: `Bots must be 0 to ${players - 1}.` })
+      const humans = this.seats().filter((s) => s.kind === 'human').length
+      if (humans > players - bots)
+        return this.sendToSeat(seat, {
+          t: 'error',
+          code: 'BAD_CONFIG',
+          message: `${humans} players are already seated, so that table needs at least ${humans} human seats.`,
+        })
+      this.setMeta({ targetPlayers: players, botCount: bots })
+      this.broadcastLobby()
+      if (humans === players - bots) this.startGame()
     }
 
     /** Bind the socket to a seat, welcome it, and tell everyone the lobby changed. */
@@ -331,17 +378,15 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
       this.scheduleDriving()
     }
 
+    /** Host only, while waiting: start with the people present; bots take every empty seat. */
     protected handleStart(seat: number): void {
       const meta = this.getMeta()!
       if (seat !== 0)
-        return this.sendToSeat(seat, { t: 'error', code: 'NOT_HOST', message: 'Only the host can start early.' })
-      const seated = this.seats().length
-      if (meta.phase !== 'waiting' || !adapter.canStartEarly(seated, meta.targetPlayers, meta.botCount))
-        return this.sendToSeat(seat, {
-          t: 'error',
-          code: 'BAD_START',
-          message: `Early start needs exactly ${meta.targetPlayers - 1} seated players.`,
-        })
+        return this.sendToSeat(seat, { t: 'error', code: 'NOT_HOST', message: 'Only the host can start the match.' })
+      if (meta.phase !== 'waiting')
+        return this.sendToSeat(seat, { t: 'error', code: 'NOT_WAITING', message: 'The match has already started.' })
+      const humans = this.seats().length
+      this.setMeta({ botCount: meta.targetPlayers - humans })
       this.startGame()
     }
 
