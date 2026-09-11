@@ -41,7 +41,7 @@ Docs: `docs/BRIEF.md` (pillars) · `docs/superpowers/specs/` (designs) ·
 
 ## Development
 
-Requirements: Node 20+, pnpm 10.
+Requirements: Node 22+, pnpm 10 (wrangler and the client tests need 22).
 
     pnpm install
     pnpm test                  # all package tests (the worker's run inside the Workers runtime)
