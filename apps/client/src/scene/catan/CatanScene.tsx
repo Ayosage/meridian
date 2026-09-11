@@ -194,12 +194,26 @@ function useStableBoard(view: CatanClientState): CatanBoardData {
   )
 }
 
-export function CatanScene({ view }: { view: CatanClientState }) {
+/**
+ * `backdrop`: the lobby's ambient use of the scene. Pointer input, the pick
+ * layer, legal-target highlights and dev hooks are off; the camera drifts
+ * (unless `drift` is false, for reduced motion); ambient occlusion is skipped
+ * and the pixel ratio capped so the lobby costs less than a match does.
+ */
+export function CatanScene({
+  view,
+  backdrop = false,
+  drift = true,
+}: {
+  view: CatanClientState
+  backdrop?: boolean
+  drift?: boolean
+}) {
   const board = useStableBoard(view)
   // view.buildings/view.roads are still live per-snapshot (see Pieces' own
   // consumers); only board's identity is pinned above.
   const stableView = useMemo(() => ({ ...view, board }), [view, board])
-  const tier = useRef(qualityTier()).current
+  const tier = useRef(backdrop ? 'low' : qualityTier()).current
   // Size-aware presentation: the 37-hex board needs a higher rig, a longer
   // orbit leash, and a wider ocean. Canvas `camera` is initial-only, which is
   // fine — a room remount recreates the Canvas.
@@ -212,7 +226,7 @@ export function CatanScene({ view }: { view: CatanClientState }) {
   return (
     <Canvas
       shadows
-      dpr={[1, 2]}
+      dpr={backdrop ? [1, 1.5] : [1, 2]}
       camera={{ position: cameraPos, fov: 42, near: 0.3, far: 100 }}
       gl={{ antialias: true, toneMappingExposure: 1.15 }}
     >
@@ -220,11 +234,14 @@ export function CatanScene({ view }: { view: CatanClientState }) {
       <GoldenHourRig shadowExtent={big ? 8 : 5.5} />
       <CatanBoard board={board} />
       <Pieces view={stableView} />
-      <PickLayer hexes={board.hexes} />
-      <Highlights view={stableView} />
+      {!backdrop && <PickLayer hexes={board.hexes} />}
+      {!backdrop && <Highlights view={stableView} />}
       <Water hexes={board.hexes} size={waterSize} />
       <OrbitControls
         target={[0, 0, 0]}
+        enabled={!backdrop}
+        autoRotate={backdrop && drift}
+        autoRotateSpeed={0.35}
         enablePan={false}
         minDistance={6}
         maxDistance={maxDist}
@@ -235,7 +252,7 @@ export function CatanScene({ view }: { view: CatanClientState }) {
         <Bloom luminanceThreshold={1.1} intensity={0.35} mipmapBlur />
         <Vignette eskil={false} offset={0.25} darkness={0.55} />
       </EffectComposer>
-      {import.meta.env.DEV && <CatanDebugHooks />}
+      {import.meta.env.DEV && !backdrop && <CatanDebugHooks />}
     </Canvas>
   )
 }

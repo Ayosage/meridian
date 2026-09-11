@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { leaveCatanMatch, startEarly } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
 import { earlyStart, humanTarget, inviteLink } from './waitingRoomLogic'
+import { LobbyBackdrop } from './LobbyBackdrop'
 
 /** Copies text and reports "Copied" for a moment; silent if the clipboard API is missing. */
 function useCopy(): [copied: string | null, copy: (label: string, text: string) => void] {
@@ -37,7 +38,9 @@ export function WaitingRoom() {
 
   return (
     <div className="lobby waiting-room">
-      <h1>Meridian</h1>
+      <LobbyBackdrop />
+      <div className="lobby-panel">
+      <h1 className="lobby-title">Meridian</h1>
 
       <section className="wr-invite" aria-labelledby="wr-code-label">
         <div id="wr-code-label" className="wr-label">
@@ -94,6 +97,7 @@ export function WaitingRoom() {
       <button type="button" className="wr-btn quiet" data-testid="leave-match" onClick={leaveCatanMatch}>
         Leave match
       </button>
+      </div>
     </div>
   )
 }

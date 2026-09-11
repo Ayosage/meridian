@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCatanStore } from '../src/scene/catan/catanStore'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -16,6 +16,8 @@ function render(el: React.ReactElement): string {
   return html
 }
 import { WaitingRoom } from '../src/ui/WaitingRoom'
+
+vi.mock('../src/ui/LobbyBackdrop', () => ({ LobbyBackdrop: () => <div data-testid="lobby-backdrop" /> }))
 
 function seed(opts: { seats: number; target: number; bots: number; seat: number }) {
   const s = useCatanStore.getState()
