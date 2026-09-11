@@ -12,7 +12,7 @@ import { IncomingOffer } from './ui/IncomingOffer'
 import { DevCardStrip } from './ui/DevCardStrip'
 import { YearOfPlentyModal } from './ui/YearOfPlentyModal'
 import { MonopolyModal } from './ui/MonopolyModal'
-import { joinCatanMatch, launchJoinCode, reconnectCatan } from './net/catan'
+import { DEAD_LINK_MESSAGE, joinCatanMatch, launchJoinCode, reconnectCatan } from './net/catan'
 import './ui/hud.css'
 
 export function App() {
@@ -23,7 +23,10 @@ export function App() {
     const code = launchJoinCode(window.location.search)
     if (code) {
       // a dead/expired code lands back in the Lobby ('error' renders it)
-      joinCatanMatch(code).catch(() => useCatanStore.getState().setStatus('error'))
+      joinCatanMatch(code).catch(() => {
+        useCatanStore.getState().setToast(DEAD_LINK_MESSAGE)
+        useCatanStore.getState().setStatus('error')
+      })
       // strip the param so a reload after the match doesn't rejoin a dead room
       window.history.replaceState(null, '', window.location.pathname)
     } else {

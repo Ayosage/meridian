@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import type { CatanPlayerCount } from '@meridian/rules'
-import { createCatanMatch, joinCatanMatch } from '../net/catan'
+import { createCatanMatch, describeJoinError, joinCatanMatch } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
 import { WaitingRoom } from './WaitingRoom'
 
 export function Lobby() {
   const status = useCatanStore((s) => s.status)
+  // 'Connection lost' / dead-link notes are set by the net layer; the lobby
+  // is the screen that ends up showing them.
+  const note = useCatanStore((s) => (s.status === 'error' ? s.toast : null))
+  const setToast = useCatanStore((s) => s.setToast)
   const [code, setCode] = useState('')
   const [players, setPlayers] = useState<CatanPlayerCount>(4)
   const [bots, setBots] = useState(0)
@@ -16,9 +20,10 @@ export function Lobby() {
   async function withCatch(fn: () => Promise<void>): Promise<void> {
     try {
       setError(null)
+      setToast(null)
       await fn()
-    } catch {
-      setError('could not reach the match — check the code and try again')
+    } catch (e) {
+      setError(describeJoinError(e))
       useCatanStore.getState().setStatus('idle')
     }
   }
@@ -85,9 +90,9 @@ export function Lobby() {
           Join
         </button>
       </div>
-      {error && (
-        <div className="error" data-testid="lobby-error">
-          {error}
+      {(error || note) && (
+        <div className="error" role="alert" data-testid="lobby-error">
+          {error ?? note}
         </div>
       )}
     </div>

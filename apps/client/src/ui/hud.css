@@ -6,16 +6,65 @@
   color: #e8e8f0;
 }
 .overlay > * { pointer-events: auto; }
-.panel {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  background: rgba(12, 14, 20, 0.8);
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 14px;
+/* --- waiting room -------------------------------------------------------- */
+.waiting-room { box-sizing: border-box; gap: 18px; padding: 24px; text-align: center; }
+.wr-invite { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.wr-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.7; }
+.wr-code {
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  /* trailing letter-spacing would otherwise push the code left of center */
+  padding-left: 0.25em;
+  font-variant-numeric: tabular-nums;
 }
-.panel .code { font-size: 22px; letter-spacing: 0.3em; font-weight: 700; }
+.wr-help { max-width: 34ch; margin: 0; font-size: 14px; line-height: 1.5; opacity: 0.85; }
+.wr-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
+.wr-status { font-size: 14px; }
+.wr-btn {
+  min-height: 44px;
+  padding: 10px 18px;
+  font-size: 15px;
+  font-family: inherit;
+  border: 1px solid rgba(127, 200, 232, 0.35);
+  border-radius: 8px;
+  background: #20222b;
+  color: #e8e8f0;
+  cursor: pointer;
+  transition:
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 120ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.wr-btn.primary { border-color: transparent; background: #2c6e8f; color: #fff; }
+.wr-btn.quiet { border-color: transparent; background: transparent; opacity: 0.8; }
+.wr-btn:active { transform: scale(0.97); }
+.wr-btn:focus-visible { outline: 2px solid #7fc8e8; outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .wr-btn:hover { background: #2a2d38; }
+  .wr-btn.primary:hover { background: #35809f; }
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+/* Socket dropped, client retrying: the board stays up, this says why it is still. */
+.connection-strip {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: #6b5b1f;
+  color: #f4d97a;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 5;
+}
 .end-turn {
   position: absolute;
   bottom: 18px;
@@ -70,7 +119,7 @@
   text-align: center;
 }
 .lobby button { padding: 10px 22px; font-size: 15px; cursor: pointer; }
-.lobby .error { color: #ff8080; font-size: 13px; }
+.lobby .error { color: #ff8080; font-size: 14px; max-width: 40ch; text-align: center; }
 .lobby .players-choice { display: flex; gap: 8px; }
 .lobby .players-choice button { padding: 8px 16px; font-size: 14px; opacity: 0.6; }
 .lobby .players-choice button.selected { opacity: 1; background: #2c6e8f; color: #fff; }

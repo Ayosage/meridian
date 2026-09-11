@@ -5,6 +5,7 @@ import { useCatanStore } from '../scene/catan/catanStore'
 import { playerCards, seatLabel } from '../scene/catan/hudLogic'
 import { seatColor } from '../scene/catan/palette'
 import { ActionLog } from './ActionLog'
+import { ConnectionBanner } from './ConnectionBanner'
 import { DiceCanvas } from './DiceCanvas'
 import { HandStrip } from './HandStrip'
 // Only App.tsx imports hud.css today; this also mounts standalone wherever
@@ -22,11 +23,11 @@ function TurnBanner({ view, seat, connected }: { view: CatanClientState; seat: n
   // has no button to discover, so a bare "Your turn" reads as a stall.
   const label = isYou
     ? phase === 'preRoll'
-      ? 'Your turn — roll'
+      ? 'Your turn: roll'
       : phase === 'setup' && view.turn.setup
-        ? `Your turn — place a ${view.turn.setup.expect}`
+        ? `Your turn: place a ${view.turn.setup.expect}`
         : phase === 'robber'
-          ? 'Your turn — move the robber'
+          ? 'Your turn: move the robber'
           : 'Your turn'
     : `${seatLabel(seatNames, current)}'s turn`
 
@@ -86,13 +87,13 @@ function Toast() {
   // restart the 3s dismiss rather than letting the first timer close the second.
   useEffect(() => {
     if (!toast) return
-    const t = setTimeout(() => setToast(null), 3000)
+    const t = setTimeout(() => setToast(null), 4000)
     return () => clearTimeout(t)
   }, [toast, toastSeq, setToast])
 
   if (!toast) return null
   return (
-    <div className="toast" data-testid="rule-error">
+    <div className="toast" role="status" aria-live="polite" data-testid="rule-error">
       {toast}
     </div>
   )
@@ -136,6 +137,7 @@ export function CatanHud() {
 
   return (
     <div className="overlay catan-hud">
+      <ConnectionBanner />
       <TurnBanner view={view} seat={seat} connected={connected} />
       <DiceDisplay dice={view.turn.dice} />
       <div className="orbit-hint" data-testid="orbit-hint">
