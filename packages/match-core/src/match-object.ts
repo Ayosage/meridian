@@ -186,7 +186,8 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
         connected: seats.map((s) => s.connected === 1),
         targetPlayers: meta.targetPlayers,
         botCount: meta.botCount,
-        seatNames: seats.map((s, i) => s.displayName ?? names[i] ?? '').filter((n) => n.length > 0),
+        // Positional: seat i reads seatNames[i]; '' means unnamed (the client falls back to Player N).
+        seatNames: seats.map((s, i) => s.displayName ?? names[i] ?? ''),
       }
     }
 

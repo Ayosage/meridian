@@ -1,3 +1,4 @@
+import { env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 import { createRoom, Seat } from './ws'
 
@@ -63,6 +64,20 @@ describe('intent loop', () => {
     // lobby broadcasts queue up as players join; the last one before the snapshot says playing
     const lobbies = host.inbox.filter((m) => m.t === 'lobby')
     expect(lobbies.at(-1)).toMatchObject({ phase: 'playing', seats: ['seat-0', 'seat-1', 'seat-2'] })
+  })
+
+  it('lobby seat names stay positional: an unnamed human is an empty slot, bots carry their names', async () => {
+    await createRoom('NAME', 3, 2)
+    const stub = env.MATCH.getByName('NAME')
+    const me = await Seat.open('NAME')
+    await me.next('snapshot')
+    expect((await stub.lobby())!.seatNames).toEqual(['', 'Bot 1', 'Bot 2'])
+    const named = await createRoom('NAMD', 3, 1)
+    const a = await Seat.open('NAMD', { displayName: 'Alice' })
+    await a.next('welcome')
+    const b = await Seat.open('NAMD')
+    await b.next('snapshot')
+    expect((await named.lobby())!.seatNames).toEqual(['Alice', '', 'Bot 1'])
   })
 
   it('a second start while waiting with too few players is refused', async () => {
