@@ -1,5 +1,5 @@
 import { randomCode } from '@meridian/match-core'
-import { handleCreateMatch } from './launch'
+import { handleCreateMatch, handleOpenMatch, type LaunchDeps } from './launch'
 import type { CatanMatch } from './match'
 export { CatanMatch } from './match'
 
@@ -32,20 +32,25 @@ export default {
     if (request.method === 'OPTIONS') return cors(env, new Response(null, { status: 204 }))
     if (url.pathname === '/healthz') return cors(env, json({ ok: true, version: env.APP_VERSION }))
 
-    if (url.pathname === '/matches' && request.method === 'POST') {
+    const creating = request.method === 'POST' && (url.pathname === '/matches' || url.pathname === '/matches/open')
+    if (creating) {
       let body: unknown = null
       try {
         body = await request.json()
       } catch {
         return cors(env, json({ error: 'body must be JSON' }, 422))
       }
-      const result = await handleCreateMatch(request.headers.get('authorization') ?? undefined, body, {
+      const deps: LaunchDeps = {
         createRoom: (code, options) => env.MATCH.getByName(code).create({ ...options, clientOrigin: env.CLIENT_ORIGIN }),
         newCode: randomCode,
         clientOrigin: env.CLIENT_ORIGIN,
         launchToken: env.LAUNCH_TOKEN,
         now: Date.now,
-      })
+      }
+      const result =
+        url.pathname === '/matches'
+          ? await handleCreateMatch(request.headers.get('authorization') ?? undefined, body, deps)
+          : await handleOpenMatch(body, deps)
       return cors(env, json(result.body, result.status))
     }
 

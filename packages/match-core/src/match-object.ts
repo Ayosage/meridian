@@ -149,7 +149,8 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
         return { status: 'invalid', message: 'bots must be an integer in 0..players-1' }
       const testing = this.env.TEST_KNOBS === '1'
       const knobs = testing ? (opts.knobs ?? {}) : {}
-      const seed = typeof opts.seed === 'number' && testing ? opts.seed : Math.floor(Math.random() * 2 ** 31)
+      const wanted = typeof opts.seed === 'number' ? opts.seed : knobs.seed
+      const seed = testing && typeof wanted === 'number' ? wanted : Math.floor(Math.random() * 2 ** 31)
       const now = Date.now()
       this.setMeta({
         phase: 'waiting',

@@ -99,16 +99,24 @@ function Toast() {
   )
 }
 
-function WinOverlay({ view }: { view: CatanClientState }) {
+export function WinOverlay({ view }: { view: CatanClientState }) {
   const seat = useCatanStore((s) => s.seat)
   const seatNames = useCatanStore((s) => s.seatNames)
-  if (view.winner === null) return null
+  const result = useCatanStore((s) => s.winner)
+  const abandoned = result?.reason === 'abandoned'
+  if (view.winner === null && !abandoned) return null
   const isYou = view.winner === seat
+  const title = abandoned
+    ? 'Match abandoned'
+    : isYou
+      ? 'You win!'
+      : `${seatLabel(seatNames, view.winner ?? 0)} wins`
   return (
     <div className="modal-backdrop">
       <div className="modal win-overlay" data-testid="win-overlay">
-        <div className="modal-title">{isYou ? 'You win!' : `${seatLabel(seatNames, view.winner)} wins`}</div>
-        {view.winnerVpCards !== null && view.winnerVpCards > 0 && (
+        <div className="modal-title">{title}</div>
+        {abandoned && <div className="win-vp-cards">Every player left, so the match was closed.</div>}
+        {!abandoned && view.winnerVpCards !== null && view.winnerVpCards > 0 && (
           <div className="win-vp-cards">+{view.winnerVpCards} VP cards revealed</div>
         )}
         <button type="button" className="modal-submit" data-testid="back-to-lobby" onClick={leaveCatanMatch}>

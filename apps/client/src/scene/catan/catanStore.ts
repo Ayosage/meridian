@@ -64,10 +64,8 @@ export type CatanStatus =
   | 'reconnecting'
   | 'error'
 
-export interface CatanMatchResult {
-  reason: 'win'
-  winner: number
-}
+/** How the match ended. `abandoned`: every human left and the object closed it (no winner). */
+export type CatanMatchResult = { reason: 'win'; winner: number } | { reason: 'abandoned'; winner: null }
 
 /**
  * Local UI mode. setup/discard/robber(/steal) are FORCED by the server's

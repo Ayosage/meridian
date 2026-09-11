@@ -1,4 +1,4 @@
-import { SELF } from 'cloudflare:test'
+import { env, SELF } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 import { Seat } from './ws'
 
@@ -60,6 +60,22 @@ describe('routes', () => {
     const pre = await SELF.fetch('https://x/matches', { method: 'OPTIONS', headers: { Origin: 'http://localhost:5173' } })
     expect(pre.status).toBe(204)
     expect(pre.headers.get('access-control-allow-headers')).toMatch(/authorization/)
+  })
+
+  it('POST /matches/open creates an ad-hoc room without a token, not launched, knobs honoured under TEST_KNOBS', async () => {
+    const res = await SELF.fetch('https://x/matches/open', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ players: 3, bots: 2, knobs: { seed: 11, targetVp: 4 } }),
+    })
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as { code: string; joinUrl: string }
+    expect(body.code).toMatch(/^[A-Z]{4}$/)
+    expect(body.joinUrl).toBe(`http://localhost:5173/?join=${body.code}`)
+    const stub = env.MATCH.getByName(body.code)
+    expect(await stub.lobby()).toMatchObject({ phase: 'waiting', targetPlayers: 3, botCount: 2 })
+    expect((await stub.deadlinesForTest())!.expiry).toBeNull()
+    expect((await SELF.fetch('https://x/matches/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ players: 1 }) })).status).toBe(422)
   })
 
   it('anything else is a 404', async () => {

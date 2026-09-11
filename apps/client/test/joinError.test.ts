@@ -10,6 +10,10 @@ describe('describeJoinError', () => {
     expect(describeJoinError(new Error('WebSocket closed'))).toMatch(/Could not reach the game server/)
     expect(describeJoinError(undefined)).toMatch(/Could not reach the game server/)
   })
+  it('names a full or already started match', () => {
+    expect(describeJoinError(Object.assign(new Error('match is full'), { code: 'FULL' }))).toMatch(/full/i)
+    expect(describeJoinError(Object.assign(new Error('match already started'), { code: 'NOT_WAITING' }))).toMatch(/already started/i)
+  })
   it('keeps the dead-link message a plain sentence', () => {
     expect(DEAD_LINK_MESSAGE).not.toMatch(/—/)
   })
