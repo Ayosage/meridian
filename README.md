@@ -31,7 +31,7 @@ Docs: `docs/BRIEF.md` (pillars) · `docs/superpowers/specs/` (designs) ·
   codes, engine-validated intents, per-seat redacted snapshots (secrets never
   leave the object), reconnect-reclaim until game end.
 - `apps/client` — Vite + React Three Fiber client: Catan lobby (pick player
-  count, share the join code, host early start), painted-miniature 3D board,
+  count, share the join code, the host sets the table and starts), painted-miniature 3D board,
   click-to-build with legality glow, HUD/discard/steal/win UI. E2E
   (3-browser full match + perf snapshot): `pnpm --filter client test:e2e`
   (requires `playwright install chromium`, and its two ports free — the
@@ -54,10 +54,10 @@ on the client shape a match for tests.
 
 To play: open http://localhost:5173, pick a player count and Create — share
 the 4-letter code; friends Join with it in their own browsers. The match
-starts when every seat fills (or the host starts early; empty seats get the
-caretaker pilot). Short on friends? Pick a bot count in the lobby — native
-bots fill the empty seats and play a competent greedy game (works for solo
-play too; no script needed). Dev extras: `/board` renders a full board
+starts when every seat fills, or when the host presses Start now: bots take
+every empty seat and play a competent greedy game (works for solo play too;
+no script needed). The host can change the player count and bots from the
+waiting room while people arrive. Dev extras: `/board` renders a full board
 without a server; `/dice` cycles the HUD dice through every face; `?tier=low`
 drops the ambient-occlusion pass on weak GPUs.
 
