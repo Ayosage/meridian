@@ -465,13 +465,25 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
       )
     }
 
+    /**
+     * A seat's stored memory plus the live offer-window flag. Both the probe and
+     * the real drive must see the same flag: the stored copy is stale the moment
+     * the window resolves, and a probe that trusts it never arms the alarm.
+     */
+    protected driveMemory(seat: number): unknown {
+      const offerDeadlineHit = this.metaValue('offerDeadlineHit') === '1'
+      const mem = this.memoryFor(seat)
+      // A seat that has never driven has no memory yet; the flag must still reach the adapter.
+      return { ...(typeof mem === 'object' && mem !== null ? (mem as object) : {}), offerDeadlineHit }
+    }
+
     /** First seat with no human that the game is waiting on, and its kind. */
     protected nextDrivenSeat(state: S): { seat: number; kind: DriveKind } | null {
       for (const row of this.seats()) {
         if (row.kind === 'human' && row.connected === 1) continue
         const kind: DriveKind = row.kind === 'bot' ? 'bot' : 'pilot'
         // The probe rng only asks "is anything pending?"; the real rng is used when the alarm fires.
-        const probe = adapter.drive(state, row.seat, kind, { next: () => 0 }, this.memoryFor(row.seat))
+        const probe = adapter.drive(state, row.seat, kind, { next: () => 0 }, this.driveMemory(row.seat))
         if (probe.intent !== null) return { seat: row.seat, kind }
       }
       return null
@@ -506,10 +518,7 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
       // Re-derive: the seat that was pending may have reconnected while the alarm was armed.
       const next = this.nextDrivenSeat(state)
       if (!next) return
-      const offerDeadlineHit = this.metaValue('offerDeadlineHit') === '1'
-      const mem = this.memoryFor(next.seat)
-      const memWithFlag = typeof mem === 'object' && mem !== null ? { ...(mem as object), offerDeadlineHit } : mem
-      const { intent, memory } = adapter.drive(state, next.seat, next.kind, intentRng(meta.seed, meta.seq + 1), memWithFlag)
+      const { intent, memory } = adapter.drive(state, next.seat, next.kind, intentRng(meta.seed, meta.seq + 1), this.driveMemory(next.seat))
       this.setMemory(next.seat, memory)
       if (intent) this.applyAndBroadcast(intent)
       else this.scheduleDriving()
@@ -564,6 +573,21 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
         }
       }
       this.armAlarm()
+    }
+
+    /** TEST_KNOBS only: read the game state. */
+    stateForTest(): S | null {
+      return this.env.TEST_KNOBS === '1' ? this.loadState() : null
+    }
+
+    /** TEST_KNOBS only: replace the game state (seq unchanged) and schedule it as if it had just been applied. */
+    loadStateForTest(state: S): void {
+      if (this.env.TEST_KNOBS !== '1') return
+      const meta = this.getMeta()
+      if (!meta) return
+      this.saveState(state, meta.seq)
+      this.scheduleDriving()
+      this.syncOfferWindow(state)
     }
 
     /** TEST_KNOBS only: expose the deadline table. */
