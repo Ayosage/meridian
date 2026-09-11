@@ -77,7 +77,7 @@ describe('WaitingRoom', () => {
     expect(html).toContain('data-testid="copy-link"')
     expect(html).toContain('data-testid="leave-match"')
     expect(html).toContain('Waiting for players (1/4)')
-    expect(html).toContain('The match starts when 4 players have joined')
+    expect(html).toContain('The match starts when you press Start now')
   })
 
   it('the host sees the table controls and a Start now that says what bots will fill', () => {
@@ -123,13 +123,13 @@ describe('WaitingRoom', () => {
     expect(html).toContain('4 players, 1 bot')
     expect(html).not.toContain('data-testid="players-4"')
     expect(html).not.toContain('data-testid="start-now"')
-    expect(html).toContain('when the host starts it')
+    expect(html).toContain('when the host presses Start now')
   })
 
   it('bot seats render from the bot count', () => {
     seed({ seats: 1, target: 4, bots: 3, seat: 0 })
     const html = render(<WaitingRoom />)
     expect(html).toContain('Bot 1')
-    expect(html).toContain('when 1 player has joined')
+    expect(html).toContain('Waiting for players (1/1)')
   })
 })

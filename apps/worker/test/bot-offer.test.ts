@@ -1,7 +1,7 @@
 import { env, runDurableObjectAlarm } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 import type { CatanState } from '@meridian/rules'
-import { createRoom, Seat } from './ws'
+import { createRoom, openHost } from './ws'
 
 /**
  * Live bug (2026-09-11): a bot offered a trade, the human muted trades (auto
@@ -13,7 +13,7 @@ describe('a bot resolves its own trade offer once everyone has answered', () => 
   it('after the last rejection the bot cancels and the turn goes on', async () => {
     await createRoom('BOFR', 3, 2)
     const stub = env.MATCH.getByName('BOFR')
-    const me = await Seat.open('BOFR')
+    const me = await openHost('BOFR')
     await me.next('snapshot')
     // Put the table in bot 1's main phase with its own offer open; bot 2 already said no.
     const state = (await stub.stateForTest()) as CatanState
@@ -48,7 +48,7 @@ describe('a bot resolves its own trade offer once everyone has answered', () => 
   it('after the offer window times out the bot cancels too', async () => {
     await createRoom('BOFT', 3, 2, { offerWindowMs: 40 })
     const stub = env.MATCH.getByName('BOFT')
-    const me = await Seat.open('BOFT')
+    const me = await openHost('BOFT')
     await me.next('snapshot')
     const state = (await stub.stateForTest()) as CatanState
     await stub.loadStateForTest({

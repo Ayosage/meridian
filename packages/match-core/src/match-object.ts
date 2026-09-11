@@ -297,11 +297,11 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
         }
         seat = 0
       }
+      // Nothing starts on its own: the host presses Start when the table is ready.
       this.seatSocket(ws, seat, token, false)
-      if (seats.length + 1 === humansWanted) this.startGame()
     }
 
-    /** Host only, while waiting: resize the table. Starts the match if the seated humans now fill it. */
+    /** Host only, while waiting: resize the table. Never starts it; that is the host's Start. */
     protected handleConfigure(seat: number, players: number, bots: number): void {
       const meta = this.getMeta()!
       if (seat !== 0)
@@ -322,7 +322,6 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
         })
       this.setMeta({ targetPlayers: players, botCount: bots })
       this.broadcastLobby()
-      if (humans === players - bots) this.startGame()
     }
 
     /** Bind the socket to a seat, welcome it, and tell everyone the lobby changed. */

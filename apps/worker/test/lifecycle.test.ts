@@ -1,6 +1,6 @@
 import { env, runDurableObjectAlarm } from 'cloudflare:test'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createRoom, Seat } from './ws'
+import { createRoom, openHost, Seat } from './ws'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -22,7 +22,8 @@ describe('lifecycle', () => {
     expect((await c.next('welcome').catch(() => null))).toBeNull() // only one welcome
     const d = await Seat.open('LIFE')
     expect((await d.next('welcome')).seat).toBe(2)
-    await a.next('snapshot') // 3 seated: playing
+    a.send({ t: 'start' }) // 3 seated: the host starts
+    await a.next('snapshot')
     a.close()
     await settle()
     expect((await stub.lobby())!.connected[0]).toBe(false)
@@ -73,7 +74,7 @@ describe('lifecycle', () => {
       callback: { url: 'https://steward.example/webhooks/results', token: 'cb_1' },
       knobs: { abandonMs: 1, botDelayMs: 5 },
     })
-    const me = await Seat.open('LIF4', { seatToken: 'st_me', displayName: 'Alice' })
+    const me = await openHost('LIF4', { seatToken: 'st_me', displayName: 'Alice' })
     await me.next('snapshot')
     me.close()
     await settle(5)
@@ -95,7 +96,7 @@ describe('lifecycle', () => {
     vi.stubGlobal('fetch', async () => new Response(n++ === 0 ? 'nope' : 'ok', { status: n === 1 ? 500 : 200 }))
     const stub = env.MATCH.getByName('LIF6')
     await stub.create({ players: 4, bots: 3, clientOrigin: 'x', callback: { url: 'https://s/x', token: 't' }, knobs: { abandonMs: 1 } })
-    const me = await Seat.open('LIF6')
+    const me = await openHost('LIF6')
     await me.next('snapshot')
     me.close()
     await settle(5)
