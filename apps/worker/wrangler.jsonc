@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "meridian",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": { "CLIENT_ORIGIN": "http://localhost:5173", "APP_VERSION": "dev" },
+  "durable_objects": { "bindings": [{ "name": "MATCH", "class_name": "CatanMatch" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CatanMatch"] }],
+  "observability": { "enabled": true }
+}
