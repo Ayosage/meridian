@@ -22,3 +22,6 @@ docs/
 
 # wrangler local secrets
 .dev.vars
+
+# wrangler dev state and dry-run output
+.wrangler/

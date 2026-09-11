@@ -17,10 +17,12 @@ test('lobby clamps bot count when switching 4 -> 3 players', async ({ page }) =>
   await page.getByTestId('players-4').click()
   await page.getByTestId('bots-3').click()
   await page.getByTestId('players-3').click()
-  // maxBots is players - 1: switching to 3 players drops the bots-3 button entirely...
-  await expect(page.getByTestId('bots-3')).toHaveCount(0)
+  // maxBots is players - 1: switching to 3 players disables the bots-3 option
+  // (the radiogroup keeps every option in place so the row never reflows)...
+  await expect(page.getByTestId('bots-3')).toBeDisabled()
   // ...and clamps the selection down to bots-2 (Lobby.tsx: setBots(b => Math.min(b, 2))).
   await expect(page.getByTestId('bots-2')).toHaveClass(/selected/)
+  await expect(page.getByTestId('bots-2')).toHaveAttribute('aria-checked', 'true')
 })
 
 test('solo 4p match vs 3 bots: instant start, bots play setup, a human turn arrives', async ({ page }) => {
