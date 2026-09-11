@@ -1,6 +1,6 @@
 import { env, runDurableObjectAlarm } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
-import { createRoom, Seat } from './ws'
+import { createRoom, openHost, Seat } from './ws'
 
 /** Fire alarms until the predicate holds or we give up. Alarms are stored deadlines; the test clock is real. */
 async function driveUntil(code: string, until: () => Promise<boolean> | boolean, max = 80) {
@@ -18,7 +18,7 @@ type SetupView = { turn: { current: number; setup: { expect: string } | null } }
 describe('driven seats', () => {
   it('bots take their setup turns from the alarm until it is the human again', async () => {
     await createRoom('DRV1')
-    const me = await Seat.open('DRV1')
+    const me = await openHost('DRV1')
     const first = await me.next('snapshot')
     const { legalSettlementVertices, topologyFor } = await import('@meridian/rules')
     const v = legalSettlementVertices(first.view as never, 0, { setup: true })[0]!
@@ -44,6 +44,8 @@ describe('driven seats', () => {
     const a = await Seat.open('DRV2')
     const b = await Seat.open('DRV2')
     const c = await Seat.open('DRV2')
+    await Promise.all([a, b, c].map((s) => s.next('welcome')))
+    a.send({ t: 'start' })
     await Promise.all([a, b, c].map((s) => s.next('snapshot')))
     // all humans connected: nothing to drive
     expect(await stub.deadlinesForTest()).toMatchObject({ pilot: null, offer: null })
@@ -52,7 +54,7 @@ describe('driven seats', () => {
   it('a bot seat with a pending move gets a pilot deadline as soon as the game starts', async () => {
     await createRoom('DRV3', 4, 3)
     const stub = env.MATCH.getByName('DRV3')
-    const me = await Seat.open('DRV3')
+    const me = await openHost('DRV3')
     const first = await me.next('snapshot')
     expect((first.view as SetupView).turn.current).toBe(0)
     // seat 0 is the human and must move first, so nothing is driven yet

@@ -207,9 +207,11 @@ test.describe('3-browser Catan match', () => {
     await p3.getByTestId('join-input').fill(code)
     await p3.getByTestId('join-button').click()
 
-    // Game auto-starts once all 3 seats fill (CatanRoom.onJoin) — wait for
-    // the HUD (turn-banner) rather than any lobby text, since who goes first
-    // in setup varies by seed.
+    // Nothing starts on its own: once all 3 seats are filled the host presses
+    // Start now. Then wait for the HUD (turn-banner) rather than any lobby
+    // text, since who goes first in setup varies by seed.
+    await expect(host.getByTestId('status')).toHaveText(/\(3\/3\)/)
+    await host.getByTestId('start-now').click()
     await expect(host.getByTestId('turn-banner')).toBeVisible({ timeout: 15_000 })
     await expect(p2.getByTestId('turn-banner')).toBeVisible({ timeout: 15_000 })
     await expect(p3.getByTestId('turn-banner')).toBeVisible({ timeout: 15_000 })

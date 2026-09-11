@@ -1,13 +1,15 @@
 import { env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
-import { createRoom, Seat } from './ws'
+import { createRoom, openHost, Seat } from './ws'
 
 describe('intent loop', () => {
-  it('a single human with three bots starts immediately and gets a setup snapshot', async () => {
+  it('a lone host with three bots presses Start and gets a setup snapshot; nothing starts on its own', async () => {
     await createRoom('PLAY')
     const me = await Seat.open('PLAY')
     const welcome = await me.next('welcome')
     expect(welcome.seat).toBe(0)
+    await expect(me.next('snapshot', 300)).rejects.toThrow(/no snapshot/)
+    me.send({ t: 'start' })
     const snap = await me.next('snapshot')
     const view = snap.view as { turn: { phase: string; current: number } }
     expect(view.turn.phase).toBe('setup')
@@ -16,7 +18,7 @@ describe('intent loop', () => {
 
   it('an illegal intent returns a rule error to the sender only and does not advance seq', async () => {
     await createRoom('PLAZ')
-    const me = await Seat.open('PLAZ')
+    const me = await openHost('PLAZ')
     await me.next('snapshot')
     me.send({ t: 'intent', intent: { type: 'rollDice' } })
     const err = await me.next('error')
@@ -27,7 +29,7 @@ describe('intent loop', () => {
 
   it('a malformed intent is rejected as BAD_MESSAGE', async () => {
     await createRoom('PLAM')
-    const me = await Seat.open('PLAM')
+    const me = await openHost('PLAM')
     await me.next('snapshot')
     me.send({ t: 'intent', intent: { type: 'teleport' } })
     expect((await me.next('error')).code).toBe('BAD_MESSAGE')
@@ -35,7 +37,7 @@ describe('intent loop', () => {
 
   it('a legal setup placement advances seq and comes back as a snapshot with events', async () => {
     await createRoom('PLAS')
-    const me = await Seat.open('PLAS')
+    const me = await openHost('PLAS')
     const first = await me.next('snapshot')
     const view = first.view as { turn: { setup: { expect: string } } }
     expect(view.turn.setup.expect).toBe('settlement')
@@ -76,13 +78,15 @@ describe('intent loop', () => {
   it('lobby seat names stay positional: an unnamed human is an empty slot, bots carry their names', async () => {
     await createRoom('NAME', 3, 2)
     const stub = env.MATCH.getByName('NAME')
-    const me = await Seat.open('NAME')
+    const me = await openHost('NAME')
     await me.next('snapshot')
     expect((await stub.lobby())!.seatNames).toEqual(['', 'Bot 1', 'Bot 2'])
     const named = await createRoom('NAMD', 3, 1)
     const a = await Seat.open('NAMD', { displayName: 'Alice' })
     await a.next('welcome')
     const b = await Seat.open('NAMD')
+    await b.next('welcome')
+    a.send({ t: 'start' })
     await b.next('snapshot')
     expect((await named.lobby())!.seatNames).toEqual(['Alice', '', 'Bot 1'])
   })

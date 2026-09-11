@@ -46,6 +46,7 @@ test('a vertex under a HUD panel becomes clickable after a drag-orbit', async ({
   await page.getByTestId('players-4').click()
   await page.getByTestId('bots-3').click()
   await page.getByTestId('create-button').click()
+  await page.getByTestId('start-now').click()
   await page.waitForFunction(() => (window.__meridianDebug?.legalTargetsOnScreen?.().targets.length ?? 0) > 0)
 
   // Real click-blocking panels here (BuildBar, CatanHud's opponent-strip,
@@ -107,5 +108,6 @@ test('the HUD advertises drag-to-orbit as a discoverability hint', async ({ page
   await page.getByTestId('players-4').click()
   await page.getByTestId('bots-3').click()
   await page.getByTestId('create-button').click()
+  await page.getByTestId('start-now').click()
   await expect(page.getByTestId('orbit-hint')).toHaveText('drag to rotate · scroll to zoom')
 })

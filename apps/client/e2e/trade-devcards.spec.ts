@@ -283,8 +283,11 @@ test.describe('trade + dev cards', () => {
       await page.getByTestId('join-button').click()
     }
 
-    // Game auto-starts once all 3 seats fill (CatanRoom.onJoin) — wait for the
-    // HUD rather than any lobby text, then for CatanScene's dev hook, which
+    // Nothing starts on its own: once all 3 seats are filled the host presses
+    // Start now. Then wait for the HUD rather than any lobby text, then for
+    // CatanScene's dev hook, which
+    await expect(host.getByTestId('status')).toHaveText(/\(3\/3\)/)
+    await host.getByTestId('start-now').click()
     // mounts after the <Canvas>'s async WebGL init and so lands later than the
     // plain-DOM turn banner.
     for (const page of pages) {

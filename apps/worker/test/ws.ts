@@ -88,3 +88,11 @@ export class Seat {
     this.ws.close(1000, 'bye')
   }
 }
+
+/** Open as the first seat (host), wait for the welcome, and press Start: bots fill the empty seats. */
+export async function openHost(code: string, hello: Record<string, unknown> = {}): Promise<Seat> {
+  const s = await Seat.open(code, hello)
+  await s.next('welcome')
+  s.send({ t: 'start' })
+  return s
+}

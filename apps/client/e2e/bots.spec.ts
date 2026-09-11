@@ -33,8 +33,9 @@ test('solo 4p match vs 3 bots: instant start, bots play setup, a human turn arri
   await page.getByTestId('bots-3').click()
   await page.getByTestId('create-button').click()
 
-  // A room filled entirely with bots has no one left to wait on — the scene
-  // mounts straight away, no waiting room / join-code screen in between.
+  // Nothing starts on its own, even with every other seat a bot: the host
+  // presses Start now from the waiting room.
+  await page.getByTestId('start-now').click()
   await page.waitForFunction(() => typeof window.__meridianDebug?.legalTargetsOnScreen === 'function')
 
   // Human is seat 0 and acts first in the snake draft: place the opening

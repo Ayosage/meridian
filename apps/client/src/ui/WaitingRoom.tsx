@@ -62,7 +62,7 @@ export function WaitingRoom() {
           {code}
         </div>
         <p className="wr-help">
-          Send the code or the link to your friends. The match starts when {humans} {humans === 1 ? 'player has' : 'players have'} joined, or when {isHost ? 'you start it' : 'the host starts it'}.
+          Send the code or the link to your friends. The match starts when {isHost ? 'you press Start now' : 'the host presses Start now'}; bots take any empty seats.
         </p>
         <div className="wr-actions">
           <button type="button" className="wr-btn" data-testid="copy-code" onClick={() => copy('code', code)}>

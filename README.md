@@ -54,9 +54,8 @@ on the client shape a match for tests.
 
 To play: open http://localhost:5173, pick a player count and Create — share
 the 4-letter code; friends Join with it in their own browsers. The match
-starts when every seat fills, or when the host presses Start now: bots take
-every empty seat and play a competent greedy game (works for solo play too;
-no script needed). The host can change the player count and bots from the
+starts when the host presses Start now: bots take every empty seat and play
+a competent greedy game (works for solo play too; no script needed). The host can change the player count and bots from the
 waiting room while people arrive. Dev extras: `/board` renders a full board
 without a server; `/dice` cycles the HUD dice through every face; `?tier=low`
 drops the ambient-occlusion pass on weak GPUs.

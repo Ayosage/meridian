@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
-import { createRoom, Seat } from './ws'
+import { createRoom, openHost, Seat } from './ws'
 
 describe('host configures the room from the web lobby', () => {
   it('the host changes player and bot counts and everyone sees the new lobby', async () => {
@@ -44,18 +44,24 @@ describe('host configures the room from the web lobby', () => {
     expect((await env.MATCH.getByName('CFG3').lobby())!.targetPlayers).toBe(4)
   })
 
-  it('a configure that makes the seated humans enough starts the match', async () => {
+  it('a configure that fills the table with bots does not start the match; Start now does', async () => {
     await createRoom('CFG4', 4, 0)
     const host = await Seat.open('CFG4')
     await host.next('welcome')
     host.send({ t: 'configure', players: 3, bots: 2 })
+    let lobby = await host.next('lobby')
+    for (let i = 0; i < 5 && lobby.botCount !== 2; i++) lobby = await host.next('lobby')
+    expect(lobby).toMatchObject({ phase: 'waiting', targetPlayers: 3, botCount: 2 })
+    await expect(host.next('snapshot', 300)).rejects.toThrow(/no snapshot/)
+    expect((await env.MATCH.getByName('CFG4').lobby())!.phase).toBe('waiting')
+    host.send({ t: 'start' })
     const snap = await host.next('snapshot')
     expect((snap.view as { players: unknown[] }).players.length).toBe(3)
   })
 
   it('configure after the match started is refused', async () => {
     await createRoom('CFG5', 4, 3)
-    const host = await Seat.open('CFG5')
+    const host = await openHost('CFG5')
     await host.next('snapshot')
     host.send({ t: 'configure', players: 5, bots: 0 })
     expect((await host.next('error')).code).toBe('NOT_WAITING')
