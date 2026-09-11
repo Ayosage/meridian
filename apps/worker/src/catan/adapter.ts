@@ -91,4 +91,5 @@ export const catanAdapter: GameAdapter<CatanState, CatanClientIntent, CatanClien
     }))
   },
   turnNumber: (state) => state.turn.number,
+  currentSeat: (state) => state.turn.current,
 }

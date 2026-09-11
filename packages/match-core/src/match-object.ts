@@ -1,8 +1,8 @@
 import { DurableObject } from 'cloudflare:workers'
 import { clientEnvelopeSchema, type LobbyPayload, type ServerEnvelope } from '@meridian/protocol'
-import { isRuleError, type GameAdapter } from './adapter'
+import { isRuleError, type DriveKind, type GameAdapter } from './adapter'
 import { intentRng } from './rng'
-import { NO_DEADLINES, earliest, type Deadlines } from './timers'
+import { NO_DEADLINES, dueKeys, earliest, type Deadlines } from './timers'
 
 export interface CreateOptions {
   players: number
@@ -399,12 +399,137 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
       }
     }
 
-    // Filled in by Task 5 (driving on the alarm) and Task 6 (rejoin, end):
-    protected scheduleDriving(): void {}
-    protected syncOfferWindow(_state: S): void {}
+    // ---- driving: pilots and bots on the single alarm ------------------------
+
+    protected humansConnected(): number {
+      return this.seats().filter((s) => s.kind === 'human' && s.connected === 1).length
+    }
+
+    protected memoryFor(seat: number): unknown {
+      const row = this.ctx.storage.sql.exec<{ json: string }>('SELECT json FROM memory WHERE seat = ?', seat).toArray()[0]
+      return row ? JSON.parse(row.json) : undefined
+    }
+
+    protected setMemory(seat: number, memory: unknown): void {
+      this.ctx.storage.sql.exec(
+        'INSERT INTO memory (seat, json) VALUES (?, ?) ON CONFLICT(seat) DO UPDATE SET json = excluded.json',
+        seat,
+        JSON.stringify(memory ?? null),
+      )
+    }
+
+    /** First seat with no human that the game is waiting on, and its kind. */
+    protected nextDrivenSeat(state: S): { seat: number; kind: DriveKind } | null {
+      for (const row of this.seats()) {
+        if (row.kind === 'human' && row.connected === 1) continue
+        const kind: DriveKind = row.kind === 'bot' ? 'bot' : 'pilot'
+        // The probe rng only asks "is anything pending?"; the real rng is used when the alarm fires.
+        const probe = adapter.drive(state, row.seat, kind, { next: () => 0 }, this.memoryFor(row.seat))
+        if (probe.intent !== null) return { seat: row.seat, kind }
+      }
+      return null
+    }
+
+    /** Arm (or clear) the pilot deadline for the next driven seat. Replaces the Colyseus room's schedulePilot. */
+    protected scheduleDriving(): void {
+      const meta = this.getMeta()
+      const state = this.loadState()
+      if (!meta || !state || meta.phase !== 'playing' || this.humansConnected() === 0) {
+        this.setDeadline('pilot', null) // paused while abandoned (spec §4)
+        this.armAlarm()
+        return
+      }
+      const next = this.nextDrivenSeat(state)
+      if (!next) {
+        this.setDeadline('pilot', null)
+      } else {
+        const knobs = this.knobs()
+        const override = next.kind === 'bot' ? knobs.botDelayMs : knobs.pilotDelayMs
+        const delay = typeof override === 'number' ? override : adapter.driveDelayMs(next.kind)
+        this.setDeadline('pilot', Date.now() + delay)
+      }
+      this.armAlarm()
+    }
+
+    protected firePilot(): void {
+      this.setDeadline('pilot', null)
+      const meta = this.getMeta()
+      const state = this.loadState()
+      if (!meta || !state || meta.phase !== 'playing' || this.humansConnected() === 0) return
+      // Re-derive: the seat that was pending may have reconnected while the alarm was armed.
+      const next = this.nextDrivenSeat(state)
+      if (!next) return
+      const offerDeadlineHit = this.metaValue('offerDeadlineHit') === '1'
+      const mem = this.memoryFor(next.seat)
+      const memWithFlag = typeof mem === 'object' && mem !== null ? { ...(mem as object), offerDeadlineHit } : mem
+      const { intent, memory } = adapter.drive(state, next.seat, next.kind, intentRng(meta.seed, meta.seq + 1), memWithFlag)
+      this.setMemory(next.seat, memory)
+      if (intent) this.applyAndBroadcast(intent)
+      else this.scheduleDriving()
+    }
+
+    /** A bot's own offer stays open for offerWindowMs, or until every other seat answered. */
+    protected syncOfferWindow(state: S): void {
+      const { open, everyoneAnswered } = adapter.offerWindow(state)
+      const current = this.seats().find((s) => s.seat === adapter.currentSeat(state))
+      if (!open || current?.kind !== 'bot') {
+        this.setDeadline('offer', null)
+        this.setMeta({ offerDeadlineHit: 0 })
+        this.armAlarm()
+        return
+      }
+      if (everyoneAnswered) {
+        // Nobody else can answer now; resolve instead of idling out the window.
+        this.setDeadline('offer', null)
+        this.setMeta({ offerDeadlineHit: 1 })
+        this.scheduleDriving()
+        return
+      }
+      if (this.deadlines().offer === null) {
+        const knobs = this.knobs()
+        const windowMs = typeof knobs.offerWindowMs === 'number' ? knobs.offerWindowMs : adapter.offerWindowMs
+        this.setDeadline('offer', Date.now() + windowMs)
+        this.armAlarm()
+      }
+    }
+
+    async alarm(): Promise<void> {
+      const now = Date.now()
+      for (const key of dueKeys(this.deadlines(), now)) {
+        switch (key) {
+          case 'pilot':
+            this.firePilot()
+            break
+          case 'offer':
+            this.setDeadline('offer', null)
+            this.setMeta({ offerDeadlineHit: 1 })
+            this.scheduleDriving()
+            break
+          case 'abandon':
+            await this.fireAbandon()
+            break
+          case 'expiry':
+            await this.fireExpiry()
+            break
+          case 'webhook':
+            await this.fireWebhook()
+            break
+        }
+      }
+      this.armAlarm()
+    }
+
+    /** TEST_KNOBS only: expose the deadline table. */
+    deadlinesForTest(): Deadlines | null {
+      return this.env.TEST_KNOBS === '1' ? this.deadlines() : null
+    }
+
+    // Filled in by Task 6 (rejoin, leave, end, expiry, webhook):
     protected onEnded(_state: S): void {}
     protected onRejoin(_seat: number): void {}
     async webSocketClose(_ws: WebSocket): Promise<void> {}
-    async alarm(): Promise<void> {}
+    protected async fireAbandon(): Promise<void> {}
+    protected async fireExpiry(): Promise<void> {}
+    protected async fireWebhook(): Promise<void> {}
   }
 }

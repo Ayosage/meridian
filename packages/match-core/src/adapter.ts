@@ -54,4 +54,6 @@ export interface GameAdapter<S, I, V, E> {
   result(state: S): Placement[]
   /** Turn number, for per-turn bot memory. */
   turnNumber(state: S): number
+  /** The seat the game is waiting on this turn. */
+  currentSeat(state: S): number
 }
