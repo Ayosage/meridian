@@ -66,7 +66,7 @@ export function WaitingRoom() {
         {seats.map((_, i) => (
           <li key={i}>
             <span className={`dot ${connected[i] ? 'connected' : 'disconnected'}`} aria-hidden="true" />
-            {seatNames[i] ?? `Player ${i + 1}`}
+            {seatNames[i] || `Player ${i + 1}`}
             {i === seat ? ' (you)' : ''}
             <span className="visually-hidden">{connected[i] ? ', connected' : ', disconnected'}</span>
           </li>

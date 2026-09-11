@@ -19,7 +19,7 @@ import { WaitingRoom } from '../src/ui/WaitingRoom'
 
 vi.mock('../src/ui/LobbyBackdrop', () => ({ LobbyBackdrop: () => <div data-testid="lobby-backdrop" /> }))
 
-function seed(opts: { seats: number; target: number; bots: number; seat: number }) {
+function seed(opts: { seats: number; target: number; bots: number; seat: number; names?: string[] }) {
   const s = useCatanStore.getState()
   s.reset()
   s.setJoined('PUVF')
@@ -29,11 +29,20 @@ function seed(opts: { seats: number; target: number; bots: number; seat: number 
     Array.from({ length: opts.seats }, () => true),
     opts.target,
     opts.bots,
+    opts.names,
   )
 }
 
 describe('WaitingRoom', () => {
   beforeEach(() => useCatanStore.getState().reset())
+
+  it('labels seats positionally: an empty name falls back to Player N, a named seat keeps its name', () => {
+    seed({ seats: 2, target: 3, bots: 0, seat: 0, names: ['', 'Bob'] })
+    const html = render(<WaitingRoom />)
+    expect(html).toContain('Player 1')
+    expect(html).toContain('Bob')
+    expect(html).not.toContain('Player 2')
+  })
 
   it('shows the code, the invite link controls, and a way out', () => {
     seed({ seats: 1, target: 4, bots: 0, seat: 0 })
