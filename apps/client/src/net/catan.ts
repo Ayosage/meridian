@@ -9,6 +9,7 @@ import {
 import type { CatanPlayerCount } from '@meridian/rules'
 import { useCatanStore } from '../scene/catan/catanStore'
 import { tokenStorage } from './tokenStorage'
+import { friendlyRuleMessage } from '../ui/waitingRoomLogic'
 
 const SERVER_URL: string = import.meta.env.VITE_SERVER_URL ?? 'ws://localhost:2567'
 
@@ -69,6 +70,25 @@ export function launchJoinCode(search: string): string | null {
   const raw = new URLSearchParams(search).get('join')?.trim().toUpperCase() ?? ''
   return /^[A-Z0-9]{1,12}$/.test(raw) ? raw : null
 }
+
+/**
+ * One sentence for the lobby's error line. Colyseus rejects an unknown room id
+ * with a matchmaking error (code 4212 / "not found"); anything else is the
+ * server being unreachable. The two used to share one message, so a typo
+ * and a dead server looked the same.
+ */
+export function describeJoinError(e: unknown): string {
+  const err = e as { code?: unknown; message?: unknown } | null
+  const code = typeof err?.code === 'number' ? err.code : null
+  const message = typeof err?.message === 'string' ? err.message : ''
+  if (code === 4212 || /not found|invalid room|no rooms/i.test(message)) {
+    return 'No match with that code. Check the four letters and try again.'
+  }
+  return 'Could not reach the game server. Check your connection and try again.'
+}
+
+/** Shown when a `?join=` link points at a room that has ended or expired. */
+export const DEAD_LINK_MESSAGE = 'That match has ended or the link has expired.'
 
 export async function joinCatanMatch(code: string): Promise<void> {
   useCatanStore.getState().setStatus('connecting')
@@ -142,7 +162,7 @@ function enterRoom(r: Room<CatanLobbyClientState>): void {
     store().ingestSnapshot(payload)
   })
   r.onMessage(MSG.RULE_ERROR, (payload: RuleErrorPayload) => {
-    store().ruleError(`${payload.code}: ${payload.message}`)
+    store().ruleError(friendlyRuleMessage(payload.message))
   })
   r.onMessage(MSG.MATCH_ENDED, (payload: MatchEndedPayload) => {
     // A finished match's reconnection token is dead weight: clear it so
@@ -159,7 +179,7 @@ function enterRoom(r: Room<CatanLobbyClientState>): void {
     if (store().status === 'ended' || store().status === 'idle') return
     void reconnectCatan().then((ok) => {
       if (!ok) {
-        store().setToast('connection lost')
+        store().setToast('Connection to the match was lost.')
         store().setStatus('error')
       }
     })
