@@ -134,8 +134,13 @@ export function sendCatanIntent(intent: CatanClientIntent): void {
   socket?.send({ t: 'intent', intent })
 }
 
-/** Host-only: start early once target-1 seats are filled. */
-export function startEarly(): void {
+/** Host only, while waiting: resize the table. The object answers with a lobby broadcast or an error. */
+export function configureLobby(players: number, bots: number): void {
+  socket?.send({ t: 'configure', players, bots })
+}
+
+/** Host only, while waiting: start with the people present; bots take the empty seats. */
+export function startMatch(): void {
   socket?.send({ t: 'start' })
 }
 
@@ -227,6 +232,8 @@ function handleMessage(m: ServerEnvelope): void {
       )
       break
     case 'welcome':
+      // A second welcome means the seat moved (the launcher's host arrived and took seat 0).
+      store.setSeat(m.seat)
       break
   }
 }

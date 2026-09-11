@@ -13,29 +13,33 @@ export function humanTarget(targetPlayers: number | null, botCount: number): num
   return Math.max(0, (targetPlayers ?? 0) - botCount)
 }
 
-export type EarlyStart =
-  /** Not the host: nothing to show. */
+export type StartPlan =
+  /** Not the host, or the table is not known yet: nothing to show. */
   | { kind: 'hidden' }
-  /** Bots fill the room, so it starts the moment the last human arrives. */
-  | { kind: 'auto' }
-  /** Server rule: exactly target-1 humans seated and no bots. */
-  | { kind: 'ready' }
-  /** Host, but the rule is not met yet; say how many more are needed. */
-  | { kind: 'needs'; players: number }
+  /** The host may start now; `fill` empty seats would be taken by bots. */
+  | { kind: 'ready'; fill: number }
 
-/** Mirrors CatanRoom.handleStart: only the host, only at target-1 seated, only without bots. */
-export function earlyStart(input: {
+/** Mirrors the match object: the host starts whenever they like and bots take every empty seat. */
+export function startPlan(input: {
   isHost: boolean
   seated: number
   targetPlayers: number | null
   botCount: number
-}): EarlyStart {
-  const { isHost, seated, targetPlayers, botCount } = input
+}): StartPlan {
+  const { isHost, seated, targetPlayers } = input
   if (!isHost || targetPlayers === null) return { kind: 'hidden' }
-  if (botCount > 0) return { kind: 'auto' }
-  const needed = targetPlayers - 1
-  if (seated >= 3 && seated === needed) return { kind: 'ready' }
-  return { kind: 'needs', players: needed }
+  return { kind: 'ready', fill: Math.max(0, targetPlayers - seated) }
+}
+
+/** Most bots a table can hold: one seat stays for the host and one for each person already here. */
+export function maxBots(targetPlayers: number, seated: number): number {
+  return Math.max(0, targetPlayers - Math.max(1, seated))
+}
+
+/** "4 players, 1 bot": the table as a joiner reads it. */
+export function tableSummary(targetPlayers: number, botCount: number): string {
+  const bots = botCount === 0 ? 'no bots' : botCount === 1 ? '1 bot' : `${botCount} bots`
+  return `${targetPlayers} players, ${bots}`
 }
 
 /**

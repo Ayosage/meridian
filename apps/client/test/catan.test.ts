@@ -3,12 +3,13 @@ import { createCatanGame, createRng, redactCatanState } from '@meridian/rules'
 import { useCatanStore } from '../src/scene/catan/catanStore'
 import { tokenStorage } from '../src/net/tokenStorage'
 import {
+  configureLobby,
   createCatanMatch,
   describeJoinError,
   joinCatanMatch,
   reconnectCatan,
   sendCatanIntent,
-  startEarly,
+  startMatch,
 } from '../src/net/catan'
 import { FakeWs, untilSockets } from './fakeWs'
 
@@ -91,12 +92,26 @@ describe('catan net wiring', () => {
     expect(useCatanStore.getState().winner).toEqual({ reason: 'abandoned', winner: null })
   })
 
-  it('sendCatanIntent and startEarly go out as envelopes', async () => {
+  it('sendCatanIntent, configureLobby and startMatch go out as envelopes', async () => {
     welcomeAll()
     await createCatanMatch(3, 0)
     sendCatanIntent({ type: 'rollDice' })
-    startEarly()
-    expect(FakeWs.last.sentMessages().slice(1)).toEqual([{ t: 'intent', intent: { type: 'rollDice' } }, { t: 'start' }])
+    configureLobby(5, 2)
+    startMatch()
+    expect(FakeWs.last.sentMessages().slice(1)).toEqual([
+      { t: 'intent', intent: { type: 'rollDice' } },
+      { t: 'configure', players: 5, bots: 2 },
+      { t: 'start' },
+    ])
+  })
+
+  it('a later welcome moves the seat (the host arrived and took seat 0)', async () => {
+    welcomeAll(0)
+    await createCatanMatch(4, 0)
+    expect(useCatanStore.getState().seat).toBe(0)
+    FakeWs.last.receive({ t: 'welcome', seat: 1, token: 'tok-123' })
+    expect(useCatanStore.getState().seat).toBe(1)
+    expect(useCatanStore.getState().status).toBe('waiting')
   })
 
   it('joinCatanMatch probes the lobby first: an unknown code is a bad-code error, a full or started room says so', async () => {

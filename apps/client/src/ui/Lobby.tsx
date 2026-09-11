@@ -3,11 +3,10 @@ import type { CatanPlayerCount } from '@meridian/rules'
 import { createCatanMatch, describeJoinError, joinCatanMatch } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
 import { LobbyBackdrop } from './LobbyBackdrop'
+import { BOT_COUNTS, PLAYER_COUNTS, Segmented } from './Segmented'
 import { WaitingRoom } from './WaitingRoom'
 
-const PLAYER_COUNTS = [3, 4, 5, 6, 7, 8] as const
 /** Every bot count the biggest table allows; counts above the current table are disabled, not removed, so nothing reflows. */
-const BOT_COUNTS = [0, 1, 2, 3, 4, 5, 6, 7] as const
 
 export function Lobby() {
   const status = useCatanStore((s) => s.status)
@@ -50,45 +49,30 @@ export function Lobby() {
 
         <fieldset className="lobby-group">
           <legend>Players</legend>
-          <div className="seg" role="radiogroup" aria-label="Players">
-            {PLAYER_COUNTS.map((n) => (
-              <button
-                key={n}
-                type="button"
-                role="radio"
-                aria-checked={players === n}
-                data-testid={`players-${n}`}
-                className={players === n ? 'seg-btn selected' : 'seg-btn'}
-                disabled={busy}
-                onClick={() => {
-                  setPlayers(n)
-                  setBots((b) => Math.min(b, n - 1))
-                }}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Players"
+            options={PLAYER_COUNTS}
+            value={players}
+            prefix="players"
+            disabled={busy}
+            onChange={(n) => {
+              setPlayers(n)
+              setBots((b) => Math.min(b, n - 1))
+            }}
+          />
         </fieldset>
 
         <fieldset className="lobby-group">
           <legend>Bots to fill empty seats</legend>
-          <div className="seg" role="radiogroup" aria-label="Bots">
-            {BOT_COUNTS.map((n) => (
-              <button
-                key={n}
-                type="button"
-                role="radio"
-                aria-checked={bots === n}
-                data-testid={`bots-${n}`}
-                className={bots === n ? 'seg-btn selected' : 'seg-btn'}
-                disabled={busy || n > maxBots}
-                onClick={() => setBots(n)}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Bots"
+            options={BOT_COUNTS}
+            value={bots}
+            prefix="bots"
+            disabled={busy}
+            isDisabled={(n) => n > maxBots}
+            onChange={setBots}
+          />
         </fieldset>
 
         <button

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { leaveCatanMatch, startEarly } from '../net/catan'
+import { configureLobby, leaveCatanMatch, startMatch } from '../net/catan'
 import { useCatanStore } from '../scene/catan/catanStore'
-import { earlyStart, humanTarget, inviteLink } from './waitingRoomLogic'
+import { maxBots, startPlan, tableSummary, humanTarget, inviteLink } from './waitingRoomLogic'
 import { LobbyBackdrop } from './LobbyBackdrop'
+import { BOT_COUNTS, PLAYER_COUNTS, Segmented } from './Segmented'
 
 /** Copies text and reports "Copied" for a moment; silent if the clipboard API is missing. */
 function useCopy(): [copied: string | null, copy: (label: string, text: string) => void] {
@@ -34,7 +35,18 @@ export function WaitingRoom() {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const link = inviteLink(origin, code)
   const humans = humanTarget(targetPlayers, botCount)
-  const start = earlyStart({ isHost: seat === 0, seated: seats.length, targetPlayers, botCount })
+  const isHost = seat === 0
+  const start = startPlan({ isHost, seated: seats.length, targetPlayers, botCount })
+  const table = targetPlayers ?? 4
+  const botCap = maxBots(table, seats.length)
+  const fillText =
+    start.kind === 'ready'
+      ? start.fill === 0
+        ? 'Everyone is here.'
+        : start.fill === 1
+          ? 'Start now fills 1 empty seat with a bot.'
+          : `Start now fills ${start.fill} empty seats with bots.`
+      : ''
 
   return (
     <div className="lobby waiting-room">
@@ -50,7 +62,7 @@ export function WaitingRoom() {
           {code}
         </div>
         <p className="wr-help">
-          Send the code or the link to your friends. The match starts when {humans} {humans === 1 ? 'player has' : 'players have'} joined.
+          Send the code or the link to your friends. The match starts when {humans} {humans === 1 ? 'player has' : 'players have'} joined, or when {isHost ? 'you start it' : 'the host starts it'}.
         </p>
         <div className="wr-actions">
           <button type="button" className="wr-btn" data-testid="copy-code" onClick={() => copy('code', code)}>
@@ -83,14 +95,43 @@ export function WaitingRoom() {
         Waiting for players ({seats.length}/{humans > 0 ? humans : '?'})
       </div>
 
-      {start.kind === 'ready' && (
-        <button type="button" className="wr-btn primary" data-testid="start-early" onClick={startEarly}>
-          Start now
-        </button>
-      )}
-      {start.kind === 'needs' && (
-        <p className="wr-help" data-testid="start-hint">
-          You can start early once {start.players} players are here. Empty seats get a caretaker.
+      {isHost ? (
+        <>
+          <fieldset className="lobby-group">
+            <legend>Players at the table</legend>
+            <Segmented
+              label="Players"
+              options={PLAYER_COUNTS}
+              value={table}
+              prefix="players"
+              onChange={(n) => configureLobby(n, Math.min(botCount, maxBots(n, seats.length)))}
+            />
+          </fieldset>
+          <fieldset className="lobby-group">
+            <legend>Bots to fill empty seats</legend>
+            <Segmented
+              label="Bots"
+              options={BOT_COUNTS}
+              value={botCount}
+              prefix="bots"
+              isDisabled={(n) => n > botCap}
+              onChange={(n) => configureLobby(table, n)}
+            />
+          </fieldset>
+          {start.kind === 'ready' && (
+            <>
+              <button type="button" className="wr-btn primary" data-testid="start-now" onClick={startMatch}>
+                Start now
+              </button>
+              <p className="wr-help" data-testid="start-hint">
+                {fillText}
+              </p>
+            </>
+          )}
+        </>
+      ) : (
+        <p className="wr-help" data-testid="table-summary">
+          Table: {tableSummary(table, botCount)}. The host can change it before the match starts.
         </p>
       )}
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { earlyStart, friendlyRuleMessage, humanTarget, inviteLink } from '../src/ui/waitingRoomLogic'
+import { friendlyRuleMessage, humanTarget, inviteLink, maxBots, startPlan, tableSummary } from '../src/ui/waitingRoomLogic'
 
 describe('inviteLink', () => {
   it('is the ?join= deep link App.tsx accepts', () => {
@@ -15,20 +15,33 @@ describe('humanTarget', () => {
   })
 })
 
-describe('earlyStart (mirrors CatanRoom.handleStart)', () => {
-  it('is hidden for everyone but the host', () => {
-    expect(earlyStart({ isHost: false, seated: 3, targetPlayers: 4, botCount: 0 })).toEqual({ kind: 'hidden' })
+describe('startPlan (mirrors the object: the host starts whenever; bots take the empty seats)', () => {
+  it('is hidden for everyone but the host, and until the table is known', () => {
+    expect(startPlan({ isHost: false, seated: 3, targetPlayers: 4, botCount: 0 })).toEqual({ kind: 'hidden' })
+    expect(startPlan({ isHost: true, seated: 1, targetPlayers: null, botCount: 0 })).toEqual({ kind: 'hidden' })
   })
-  it('is automatic when bots fill the room', () => {
-    expect(earlyStart({ isHost: true, seated: 1, targetPlayers: 4, botCount: 3 })).toEqual({ kind: 'auto' })
+  it('tells the host how many empty seats bots would take right now', () => {
+    expect(startPlan({ isHost: true, seated: 2, targetPlayers: 4, botCount: 0 })).toEqual({ kind: 'ready', fill: 2 })
+    expect(startPlan({ isHost: true, seated: 1, targetPlayers: 4, botCount: 2 })).toEqual({ kind: 'ready', fill: 3 })
+    expect(startPlan({ isHost: true, seated: 5, targetPlayers: 8, botCount: 0 })).toEqual({ kind: 'ready', fill: 3 })
   })
-  it('is ready only at exactly target-1 humans, at least 3', () => {
-    expect(earlyStart({ isHost: true, seated: 3, targetPlayers: 4, botCount: 0 })).toEqual({ kind: 'ready' })
-    expect(earlyStart({ isHost: true, seated: 2, targetPlayers: 3, botCount: 0 })).toEqual({ kind: 'needs', players: 2 })
+})
+
+describe('maxBots', () => {
+  it('leaves a seat for everyone already here and one for the host', () => {
+    expect(maxBots(4, 2)).toBe(2)
+    expect(maxBots(4, 1)).toBe(3)
+    expect(maxBots(3, 3)).toBe(0)
+    expect(maxBots(8, 1)).toBe(7)
+    expect(maxBots(4, 0)).toBe(3)
   })
-  it('tells the host how many players the rule needs', () => {
-    expect(earlyStart({ isHost: true, seated: 1, targetPlayers: 4, botCount: 0 })).toEqual({ kind: 'needs', players: 3 })
-    expect(earlyStart({ isHost: true, seated: 5, targetPlayers: 8, botCount: 0 })).toEqual({ kind: 'needs', players: 7 })
+})
+
+describe('tableSummary', () => {
+  it('reads as a sentence fragment for the non-host view', () => {
+    expect(tableSummary(4, 1)).toBe('4 players, 1 bot')
+    expect(tableSummary(3, 0)).toBe('3 players, no bots')
+    expect(tableSummary(5, 2)).toBe('5 players, 2 bots')
   })
 })
 
