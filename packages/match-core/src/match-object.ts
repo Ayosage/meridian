@@ -524,12 +524,155 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
       return this.env.TEST_KNOBS === '1' ? this.deadlines() : null
     }
 
-    // Filled in by Task 6 (rejoin, leave, end, expiry, webhook):
-    protected onEnded(_state: S): void {}
-    protected onRejoin(_seat: number): void {}
-    async webSocketClose(_ws: WebSocket): Promise<void> {}
-    protected async fireAbandon(): Promise<void> {}
-    protected async fireExpiry(): Promise<void> {}
-    protected async fireWebhook(): Promise<void> {}
+    // ---- leave, rejoin, end --------------------------------------------------
+
+    async webSocketClose(ws: WebSocket): Promise<void> {
+      const att = this.attachment(ws)
+      if (!att) return
+      const meta = this.getMeta()
+      if (!meta) return
+      // another socket for the same seat (duplicate tab) keeps the seat connected
+      const stillOpen = this.ctx.getWebSockets().some((o) => o !== ws && this.attachment(o)?.seat === att.seat)
+      if (stillOpen) return
+      if (meta.phase === 'waiting') {
+        // Free the seat and renumber so seats stay 0..n-1 (bots are only added at start).
+        const rest = this.seats().filter((r) => r.seat !== att.seat)
+        this.ctx.storage.sql.exec('DELETE FROM seats')
+        rest.forEach((r, i) =>
+          this.ctx.storage.sql.exec(
+            'INSERT INTO seats (seat, kind, token, seatToken, displayName, connected) VALUES (?, ?, ?, ?, ?, ?)',
+            i, r.kind, r.token, r.seatToken, r.displayName, r.connected,
+          ),
+        )
+        for (const o of this.ctx.getWebSockets()) {
+          const a = this.attachment(o)
+          if (a && a.seat > att.seat) o.serializeAttachment({ ...a, seat: a.seat - 1 })
+        }
+        this.broadcastLobby()
+        // An empty ad-hoc room goes away after 30s (Colyseus autoDispose); a launched room keeps its invite window.
+        if (rest.length === 0 && meta.launched === 0) {
+          this.setDeadline('expiry', Date.now() + 30_000)
+          this.armAlarm()
+        }
+        return
+      }
+      if (meta.phase !== 'playing') return
+      this.ctx.storage.sql.exec('UPDATE seats SET connected = 0 WHERE seat = ?', att.seat)
+      this.broadcastLobby()
+      this.scheduleDriving()
+      if (this.humansConnected() === 0) {
+        const knobs = this.knobs()
+        const abandonMs = typeof knobs.abandonMs === 'number' ? knobs.abandonMs : 10 * 60_000
+        if (this.deadlines().abandon === null) this.setDeadline('abandon', Date.now() + abandonMs)
+        this.armAlarm()
+      }
+    }
+
+    async webSocketError(ws: WebSocket): Promise<void> {
+      return this.webSocketClose(ws)
+    }
+
+    protected onRejoin(seat: number): void {
+      this.setDeadline('abandon', null)
+      const meta = this.getMeta()!
+      const state = this.loadState()
+      if (meta.phase !== 'waiting' && state) {
+        this.sendToSeat(seat, { t: 'snapshot', seq: meta.seq, view: adapter.view(state, seat) })
+        if (meta.phase === 'ended') {
+          const reason = this.metaValue('resultStatus') === 'abandoned' ? 'abandoned' : 'win'
+          this.sendToSeat(seat, { t: 'ended', reason, winner: adapter.winner(state) })
+        }
+      }
+      this.scheduleDriving()
+    }
+
+    protected onEnded(state: S): void {
+      this.setDeadline('pilot', null)
+      this.setDeadline('offer', null)
+      this.setDeadline('abandon', null)
+      this.setMeta({ resultStatus: 'completed', resultJson: JSON.stringify(adapter.result(state)) })
+      this.setDeadline('webhook', Date.now())
+      // ended rooms delete their storage a day later
+      this.setDeadline('expiry', Date.now() + 24 * 60 * 60_000)
+      this.armAlarm()
+    }
+
+    protected async fireAbandon(): Promise<void> {
+      this.setDeadline('abandon', null)
+      const meta = this.getMeta()
+      const state = this.loadState()
+      if (!meta || meta.phase !== 'playing' || !state) return
+      this.setMeta({ phase: 'ended', resultStatus: 'abandoned', resultJson: JSON.stringify(adapter.result(state)) })
+      this.setDeadline('pilot', null)
+      this.setDeadline('offer', null)
+      for (const ws of this.ctx.getWebSockets()) this.send(ws, { t: 'ended', reason: 'abandoned', winner: null })
+      this.setDeadline('webhook', Date.now())
+      this.setDeadline('expiry', Date.now() + 24 * 60 * 60_000)
+    }
+
+    protected async fireExpiry(): Promise<void> {
+      // A waiting room nobody used, or an ended match past its grace: the instance's storage goes away.
+      const meta = this.getMeta()
+      if (!meta || meta.phase === 'playing') {
+        this.setDeadline('expiry', null)
+        return
+      }
+      for (const ws of this.ctx.getWebSockets()) {
+        try {
+          ws.close(1000, 'match expired')
+        } catch {
+          // already gone
+        }
+      }
+      await this.ctx.storage.deleteAll()
+      await this.ctx.storage.deleteAlarm()
+      // deleteAll drops the tables too; keep this instance answerable (lobby() -> null) until it is evicted.
+      this.ctx.storage.sql.exec(SCHEMA)
+    }
+
+    protected async fireWebhook(): Promise<void> {
+      const meta = this.getMeta()
+      if (!meta || !meta.callbackUrl || !meta.callbackToken) {
+        this.setDeadline('webhook', null)
+        return
+      }
+      const status = this.metaValue('resultStatus') ?? 'completed'
+      const placements = JSON.parse(this.metaValue('resultJson') ?? '[]') as {
+        seat: number
+        placement: number
+        winner: boolean
+        stats: Record<string, unknown>
+      }[]
+      const seats = this.seats()
+      const body = {
+        code: this.ctx.id.name ?? null,
+        status,
+        seats: placements.map((p) => {
+          const row = seats.find((s) => s.seat === p.seat)
+          return {
+            ...(row?.seatToken ? { seatToken: row.seatToken } : {}),
+            ...(row?.displayName ? { displayName: row.displayName } : {}),
+            placement: p.placement,
+            winner: p.winner,
+            stats: p.stats,
+          }
+        }),
+      }
+      const attempt = Number(this.metaValue('webhookAttempts') ?? '0') + 1
+      let ok = false
+      try {
+        const res = await fetch(meta.callbackUrl, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${meta.callbackToken}`, 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        ok = res.ok
+      } catch {
+        ok = false
+      }
+      this.setMeta({ webhookAttempts: attempt })
+      if (ok || attempt >= 20) this.setDeadline('webhook', null)
+      else this.setDeadline('webhook', Date.now() + Math.min(60 * 60_000, 2 ** attempt * 1000)) // 2s, 4s, ... capped at 1h
+    }
   }
 }
