@@ -15,3 +15,7 @@ blob-report/
 .vercel/
 .vercel
 .env*
+
+# internal docs stay local (README.md is the only published doc)
+docs/
+.design-pass/
