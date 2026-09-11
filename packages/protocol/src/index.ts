@@ -154,3 +154,5 @@ export interface CatanSnapshotPayload {
   /** What the applied intent did, pre-redacted for this seat. Absent on resync/initial snapshots. */
   events?: readonly CatanEvent[]
 }
+
+export * from './envelope'
