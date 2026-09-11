@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import { clientEnvelopeSchema, type LobbyPayload, type ServerEnvelope } from '@meridian/protocol'
-import type { GameAdapter } from './adapter'
+import { isRuleError, type GameAdapter } from './adapter'
+import { intentRng } from './rng'
 import { NO_DEADLINES, earliest, type Deadlines } from './timers'
 
 export interface CreateOptions {
@@ -284,10 +285,124 @@ export function createMatchObject<S, I, V, E>(adapter: GameAdapter<S, I, V, E>) 
       if (rejoin) this.onRejoin(seat)
     }
 
-    // Filled in by Task 4 (intent loop) and Task 5/6 (driving, rejoin):
-    protected startGame(): void {}
-    protected handleStart(_seat: number): void {}
-    protected handleIntent(_seat: number, _intent: unknown): void {}
+    // ---- state -------------------------------------------------------------
+
+    protected loadState(): S | null {
+      const row = this.ctx.storage.sql.exec<{ json: string }>('SELECT json FROM state WHERE id = 1').toArray()[0]
+      return row ? (JSON.parse(row.json) as S) : null
+    }
+
+    protected saveState(state: S, seq: number): void {
+      // Two writes, no await between them: coalesced into one transaction.
+      this.ctx.storage.sql.exec(
+        'INSERT INTO state (id, json) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json',
+        JSON.stringify(state),
+      )
+      this.setMeta({ seq })
+    }
+
+    protected knobs(): Record<string, unknown> {
+      return JSON.parse(this.metaValue('knobs') ?? '{}') as Record<string, unknown>
+    }
+
+    /** Seat the bots after the humans present, create the game for the seated count, and go. */
+    protected startGame(): void {
+      const meta = this.getMeta()!
+      const humans = this.seats().length
+      for (let i = 0; i < meta.botCount; i++) {
+        this.ctx.storage.sql.exec(
+          'INSERT INTO seats (seat, kind, token, seatToken, displayName, connected) VALUES (?, ?, NULL, NULL, ?, 1)',
+          humans + i,
+          'bot',
+          `Bot ${i + 1}`,
+        )
+      }
+      // Same as the Colyseus room: an early start plays with the seats that exist, not the target.
+      const playerCount = this.seats().length
+      const knobs = this.knobs()
+      const state = adapter.create({ ...knobs, playerCount, seed: meta.seed }, intentRng(meta.seed, 0))
+      this.saveState(state, 0)
+      this.setMeta({ phase: 'playing' })
+      this.setDeadline('expiry', null)
+      this.broadcastLobby()
+      this.broadcastViews()
+      this.scheduleDriving()
+    }
+
+    protected handleStart(seat: number): void {
+      const meta = this.getMeta()!
+      if (seat !== 0)
+        return this.sendToSeat(seat, { t: 'error', code: 'NOT_HOST', message: 'Only the host can start early.' })
+      const seated = this.seats().length
+      if (meta.phase !== 'waiting' || !adapter.canStartEarly(seated, meta.targetPlayers, meta.botCount))
+        return this.sendToSeat(seat, {
+          t: 'error',
+          code: 'BAD_START',
+          message: `Early start needs exactly ${meta.targetPlayers - 1} seated players.`,
+        })
+      this.startGame()
+    }
+
+    protected handleIntent(seat: number, raw: unknown): void {
+      const parsed = adapter.intentSchema.safeParse(raw)
+      if (!parsed.success)
+        return this.sendToSeat(seat, { t: 'error', code: 'BAD_MESSAGE', message: 'Malformed intent.' })
+      const meta = this.getMeta()!
+      if (meta.phase !== 'playing')
+        return this.sendToSeat(seat, { t: 'error', code: 'NOT_PLAYING', message: 'The match is not in progress.' })
+      this.applyAndBroadcast({ ...(parsed.data as object), player: seat } as I & { player: number }, seat)
+    }
+
+    /** Single choke point: every state change flows through here. The SQLite write lands before any send. */
+    protected applyAndBroadcast(intent: I & { player: number }, errorTo?: number): void {
+      const meta = this.getMeta()!
+      const state = this.loadState()
+      if (!state || meta.phase !== 'playing') return
+      const result = adapter.apply(state, intent, intentRng(meta.seed, meta.seq + 1))
+      if (isRuleError(result)) {
+        if (errorTo !== undefined)
+          return this.sendToSeat(errorTo, { t: 'error', code: result.code, message: result.message })
+        // A driven seat has no client to correct it; re-arm and shout, since the brains should never reach this.
+        console.warn(
+          `[match ${this.ctx.id.name ?? this.ctx.id.toString().slice(0, 8)}] driven seat ${intent.player} rejected: ${result.code} ${result.message}`,
+        )
+        this.scheduleDriving()
+        return
+      }
+      const seq = meta.seq + 1
+      this.saveState(result, seq)
+      const events = adapter.events(state, intent, result)
+      this.broadcastViews(events)
+      if (adapter.isEnded(result)) {
+        this.setMeta({ phase: 'ended' })
+        for (const ws of this.ctx.getWebSockets()) this.send(ws, { t: 'ended', reason: 'win', winner: adapter.winner(result) })
+        this.onEnded(result)
+        return
+      }
+      this.scheduleDriving()
+      this.syncOfferWindow(result)
+    }
+
+    protected broadcastViews(events: E[] = []): void {
+      const state = this.loadState()
+      const meta = this.getMeta()
+      if (!state || !meta) return
+      for (const row of this.seats()) {
+        if (row.kind !== 'human') continue
+        const msg: ServerEnvelope = {
+          t: 'snapshot',
+          seq: meta.seq,
+          view: adapter.view(state, row.seat),
+          ...(events.length > 0 ? { events: events.map((e) => adapter.redactEvent(e, row.seat)) } : {}),
+        }
+        this.sendToSeat(row.seat, msg)
+      }
+    }
+
+    // Filled in by Task 5 (driving on the alarm) and Task 6 (rejoin, end):
+    protected scheduleDriving(): void {}
+    protected syncOfferWindow(_state: S): void {}
+    protected onEnded(_state: S): void {}
     protected onRejoin(_seat: number): void {}
     async webSocketClose(_ws: WebSocket): Promise<void> {}
     async alarm(): Promise<void> {}
