@@ -48,7 +48,6 @@ export interface GameAdapter<S, I, V, E> {
   /** Bot trade offers: is one open, and has every other seat answered? */
   offerWindow(state: S): { open: boolean; everyoneAnswered: boolean }
   offerWindowMs: number
-  canStartEarly(seated: number, target: number, bots: number): boolean
   isEnded(state: S): boolean
   winner(state: S): number | null
   result(state: S): Placement[]

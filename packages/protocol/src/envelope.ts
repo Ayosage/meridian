@@ -17,7 +17,12 @@ export const clientEnvelopeSchema = z.discriminatedUnion('t', [
     })
     .strict(),
   z.object({ t: z.literal('intent'), intent: z.unknown() }).strict(),
+  /** Host only, while waiting: start now; bots fill the empty seats. */
   z.object({ t: z.literal('start') }).strict(),
+  /** Host only, while waiting: set the table size and how many seats bots take. */
+  z
+    .object({ t: z.literal('configure'), players: z.number().int().min(2), bots: z.number().int().nonnegative() })
+    .strict(),
 ])
 export type ClientEnvelope = z.infer<typeof clientEnvelopeSchema>
 

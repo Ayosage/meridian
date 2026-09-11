@@ -12,6 +12,8 @@ export interface RoomOptions {
   launched: boolean
   seatNames?: string[]
   callback?: { url: string; token: string }
+  /** The launcher's host; that seat token owns seat 0. */
+  host?: { seatToken: string; displayName?: string }
   /** Test knobs (seed, targetVp, delays); the object ignores them unless TEST_KNOBS=1. */
   knobs?: Record<string, unknown>
 }
@@ -86,11 +88,20 @@ export async function handleCreateMatch(
       return { status: 422, body: { error: 'callback must be { url, token }' } }
     callback = { url: cb.url, token: cb.token }
   }
+  let host: { seatToken: string; displayName?: string } | undefined
+  if (b.host !== undefined) {
+    const h = b.host as { seatToken?: unknown; displayName?: unknown } | null
+    const nameOk = h?.displayName === undefined || typeof h.displayName === 'string'
+    if (!h || typeof h.seatToken !== 'string' || h.seatToken.length === 0 || !nameOk)
+      return { status: 422, body: { error: 'host must be { seatToken, displayName? }' } }
+    host = { seatToken: h.seatToken, ...(typeof h.displayName === 'string' ? { displayName: h.displayName } : {}) }
+  }
   return allocate(deps, {
     ...c,
     launched: true,
     ...(seatNames ? { seatNames: seatNames as string[] } : {}),
     ...(callback ? { callback } : {}),
+    ...(host ? { host } : {}),
   })
 }
 

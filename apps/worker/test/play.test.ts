@@ -47,23 +47,30 @@ describe('intent loop', () => {
     expect(next.events?.length).toBeGreaterThan(0)
   })
 
-  it('early start: host at target-1 with no bots starts a game of the seated count; others cannot', async () => {
+  it('start now: the host starts with the people present and bots fill the empty seats', async () => {
     await createRoom('EARL', 4, 0)
     const host = await Seat.open('EARL')
     const p2 = await Seat.open('EARL')
-    const p3 = await Seat.open('EARL')
     await host.next('welcome')
     await p2.next('welcome')
-    await p3.next('welcome')
     p2.send({ t: 'start' })
     expect((await p2.next('error')).code).toBe('NOT_HOST')
     host.send({ t: 'start' })
     const snap = await host.next('snapshot')
-    // Same as the Colyseus room: the seat that never came is not a phantom pilot; the game is 3 players.
-    expect((snap.view as { players: unknown[] }).players.length).toBe(3)
-    // lobby broadcasts queue up as players join; the last one before the snapshot says playing
+    expect((snap.view as { players: unknown[] }).players.length).toBe(4)
     const lobbies = host.inbox.filter((m) => m.t === 'lobby')
-    expect(lobbies.at(-1)).toMatchObject({ phase: 'playing', seats: ['seat-0', 'seat-1', 'seat-2'] })
+    expect(lobbies.at(-1)).toMatchObject({ phase: 'playing', seats: ['seat-0', 'seat-1', 'bot-2', 'bot-3'], botCount: 2 })
+  })
+
+  it('start now works for a lone host: the whole table fills with bots', async () => {
+    await createRoom('EAR2', 3, 0)
+    const host = await Seat.open('EAR2')
+    await host.next('welcome')
+    host.send({ t: 'start' })
+    const snap = await host.next('snapshot')
+    expect((snap.view as { players: unknown[] }).players.length).toBe(3)
+    host.send({ t: 'start' })
+    expect((await host.next('error')).code).toBe('NOT_WAITING')
   })
 
   it('lobby seat names stay positional: an unnamed human is an empty slot, bots carry their names', async () => {
@@ -80,11 +87,4 @@ describe('intent loop', () => {
     expect((await named.lobby())!.seatNames).toEqual(['Alice', '', 'Bot 1'])
   })
 
-  it('a second start while waiting with too few players is refused', async () => {
-    await createRoom('EAR2', 4, 0)
-    const host = await Seat.open('EAR2')
-    await host.next('welcome')
-    host.send({ t: 'start' })
-    expect((await host.next('error')).code).toBe('BAD_START')
-  })
 })
