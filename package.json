@@ -19,7 +19,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
-      "workerd"
+      "workerd",
+      "@ayosage/match-core"
     ]
   }
 }

@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "zod": "^3.23.0",
-    "@meridian/rules": "workspace:*"
+    "@meridian/rules": "workspace:*",
+    "@ayosage/match-core": "github:Ayosage/match-core#v0.1.2"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

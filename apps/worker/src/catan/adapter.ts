@@ -12,7 +12,7 @@ import {
   type CompanionOpts,
 } from '@meridian/rules'
 import { catanIntentSchema, type CatanClientIntent, type CatanEvent } from '@meridian/protocol'
-import type { GameAdapter, Placement } from '@meridian/match-core'
+import type { GameAdapter, Placement } from '@ayosage/match-core'
 import { deriveCatanEvents, redactEventForSeat } from './events'
 import { pilotIntent } from './pilot'
 
