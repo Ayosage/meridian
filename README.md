@@ -19,11 +19,10 @@ Docs: `docs/BRIEF.md` (pillars) · `docs/superpowers/specs/` (designs) ·
 - `packages/protocol` — zod schemas for client↔server messages: the Catan
   intents, the action-log events, and the transport envelope
   (`hello`/`welcome`/`lobby`/`snapshot`/`error`/`ended`).
-- `packages/match-core` — game-agnostic match object for Cloudflare Durable
-  Objects: seats and reconnect tokens, hibernating WebSockets, the intent
-  loop with SQLite-persisted state, one alarm driving pilots, bots, trade
-  windows, abandonment and expiry, and the result webhook. Parameterised by
-  a `GameAdapter`, so another game is another adapter.
+- [`@ayosage/match-core`](https://github.com/Ayosage/match-core) (its own repo,
+  installed from GitHub): the Durable Object match engine, the launcher routes
+  and the browser transport, shared with Wordy Champions. A game is one
+  `GameAdapter`.
 - `apps/worker` — Meridian's Worker: the Catan adapter (rules + caretaker
   pilot + event derivation) bound to `match-core`, `POST /matches` for
   launchers (bearer token), `POST /matches/open` for the browser's Create
