@@ -22,7 +22,7 @@
     "react-dom": "^18.3.0",
     "three": "^0.169.0",
     "zustand": "^5.0.0",
-    "@ayosage/match-core": "github:Ayosage/match-core#v0.1.2"
+    "@ayosage/match-core": "github:Ayosage/match-core#v0.1.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
