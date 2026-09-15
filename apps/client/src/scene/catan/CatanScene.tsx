@@ -195,6 +195,64 @@ function useStableBoard(view: CatanClientState): CatanBoardData {
 }
 
 /**
+ * How far the camera has to sit for a board of `radius` world units to fit
+ * inside BOTH frusta. The horizontal half-angle is the narrow one on a
+ * portrait phone, the vertical one on every window wider than it is tall, so
+ * taking the smaller of the two is what stops a 390px screen from cropping
+ * the board on all four sides.
+ */
+export function fitDistance(radius: number, fovDeg: number, aspect: number): number {
+  const vHalf = (fovDeg * Math.PI) / 360
+  const hHalf = Math.atan(Math.tan(vHalf) * aspect)
+  return radius / Math.sin(Math.min(vHalf, hHalf))
+}
+
+/**
+ * Camera + orbit leash, sized from the live viewport rather than pinned at
+ * mount. The Canvas `camera` prop is initial-only, so the old fixed position
+ * (tuned in a desktop window) cropped the board on a phone. `radius` is
+ * calibrated so that any window at least as wide as it is tall keeps exactly
+ * the framing this scene has always had: there the vertical frustum is the
+ * narrow one and the distance works out to the old hardcoded value.
+ *
+ * Only the distance is rewritten, never the direction, so a resize mid-match
+ * keeps whatever angle the player has orbited to.
+ */
+function BoardCamera({ radius, baseMaxDistance, enabled, autoRotate }: {
+  radius: number
+  baseMaxDistance: number
+  enabled: boolean
+  autoRotate: boolean
+}) {
+  const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
+  const width = useThree((s) => s.size.width)
+  const height = useThree((s) => s.size.height)
+  const distance = fitDistance(radius, camera.fov, width / Math.max(1, height))
+
+  useEffect(() => {
+    const dir = camera.position.clone()
+    if (dir.lengthSq() < 1e-6) dir.set(0, 1, 1)
+    camera.position.copy(dir.normalize().multiplyScalar(distance))
+    camera.updateProjectionMatrix()
+  }, [camera, distance])
+
+  return (
+    <OrbitControls
+      target={[0, 0, 0]}
+      enabled={enabled}
+      autoRotate={autoRotate}
+      autoRotateSpeed={0.35}
+      enablePan={false}
+      // the leash has to reach wherever the fit put us, or OrbitControls'
+      // first update() would clamp the board straight back off-screen
+      minDistance={Math.min(6, distance)}
+      maxDistance={Math.max(baseMaxDistance, distance * 1.15)}
+      maxPolarAngle={Math.PI * 0.45}
+    />
+  )
+}
+
+/**
  * `backdrop`: the lobby's ambient use of the scene. Pointer input, the pick
  * layer, legal-target highlights and dev hooks are off; the camera drifts
  * (unless `drift` is false, for reduced motion); ambient occlusion is skipped
@@ -215,12 +273,19 @@ export function CatanScene({
   const stableView = useMemo(() => ({ ...view, board }), [view, board])
   const tier = useRef(backdrop ? 'low' : qualityTier()).current
   // Size-aware presentation: the 37-hex board needs a higher rig, a longer
-  // orbit leash, and a wider ocean. Canvas `camera` is initial-only, which is
-  // fine — a room remount recreates the Canvas.
+  // orbit leash, and a wider ocean.
   const big = board.hexes.length > 19
+  // The sight line only; BoardCamera owns how far along it the camera sits.
   const cameraPos: [number, number, number] = big ? [0, 12.5, 11] : [0, 9, 8]
+  // |cameraPos| * sin(fov/2): the board radius the old fixed distance framed.
+  const fitRadius = big ? 5.967 : 4.315
   const maxDist = big ? 19 : 14
-  const waterSize = big ? 38 : 28
+  // Wide enough that the ocean still reaches every frame edge from the
+  // furthest the fit above can push the camera (a tall, narrow phone), where
+  // a 28-unit plane ended before the horizon did and left a band of bare sky
+  // across the top of the board. One extra quad; on a desktop window the
+  // added ocean is all off-screen.
+  const waterSize = big ? 84 : 64
   // (shadow frustum is sized alongside: the radius-3 board spans ~±6 units, past the ±5.5 default)
 
   return (
@@ -228,7 +293,11 @@ export function CatanScene({
       shadows
       dpr={backdrop ? [1, 1.5] : [1, 2]}
       camera={{ position: cameraPos, fov: 42, near: 0.3, far: 100 }}
-      gl={{ antialias: true, toneMappingExposure: 1.15 }}
+      // No MSAA on the default framebuffer: EffectComposer renders into its
+      // own multisampled target and blits a single fullscreen quad back, so
+      // the canvas' own samples were paid for and thrown away every frame.
+      // (The board's antialiasing comes from the composer, not from here.)
+      gl={{ antialias: false, toneMappingExposure: 1.15 }}
     >
       <SkyBackdrop />
       <GoldenHourRig shadowExtent={big ? 8 : 5.5} />
@@ -237,16 +306,18 @@ export function CatanScene({
       {!backdrop && <PickLayer hexes={board.hexes} />}
       {!backdrop && <Highlights view={stableView} />}
       <Water hexes={board.hexes} size={waterSize} />
-      <OrbitControls
-        target={[0, 0, 0]}
+      <BoardCamera
+        radius={fitRadius}
+        baseMaxDistance={maxDist}
         enabled={!backdrop}
         autoRotate={backdrop && drift}
-        autoRotateSpeed={0.35}
-        enablePan={false}
-        minDistance={6}
-        maxDistance={maxDist}
-        maxPolarAngle={Math.PI * 0.45}
       />
+      {/* The composer owns the depth texture N8AO samples. postprocessing
+          6.39.4 cloned that texture for its "stable" copy, and three shares
+          one GPU image between a texture and its clones, so the depth blit
+          read and wrote the same image: ~250 GL_INVALID_OPERATIONs on entering
+          a match, then a lost context. Fixed in 6.39.5, which is why the
+          client pins it. */}
       <EffectComposer>
         {tier === 'high' ? <N8AO halfRes intensity={2.5} aoRadius={0.4} /> : <></>}
         <Bloom luminanceThreshold={1.1} intensity={0.35} mipmapBlur />

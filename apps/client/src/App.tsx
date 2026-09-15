@@ -12,7 +12,7 @@ import { IncomingOffer } from './ui/IncomingOffer'
 import { DevCardStrip } from './ui/DevCardStrip'
 import { YearOfPlentyModal } from './ui/YearOfPlentyModal'
 import { MonopolyModal } from './ui/MonopolyModal'
-import { DEAD_LINK_MESSAGE, joinCatanMatch, launchJoinCode, reconnectCatan } from './net/catan'
+import { describeInviteError, joinCatanMatch, launchJoinCode, reconnectCatan } from './net/catan'
 import './ui/hud.css'
 
 export function App() {
@@ -22,9 +22,10 @@ export function App() {
   useEffect(() => {
     const code = launchJoinCode(window.location.search)
     if (code) {
-      // a dead/expired code lands back in the Lobby ('error' renders it)
-      joinCatanMatch(code).catch(() => {
-        useCatanStore.getState().setToast(DEAD_LINK_MESSAGE)
+      // a refused code lands back in the Lobby ('error' renders it) with the
+      // reason the Worker gave — full, already started, dead link, or offline
+      joinCatanMatch(code).catch((e: unknown) => {
+        useCatanStore.getState().setToast(describeInviteError(e))
         useCatanStore.getState().setStatus('error')
       })
       // strip the param so a reload after the match doesn't rejoin a dead room

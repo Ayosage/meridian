@@ -86,6 +86,19 @@ export function describeJoinError(e: unknown): string {
 /** Shown when a `?join=` link points at a room that has ended or expired. */
 export const DEAD_LINK_MESSAGE = 'That match has ended or the link has expired.'
 
+/**
+ * The same sentence for an invite link (`?join=CODE`), where nobody typed the
+ * code: a room the Worker has never heard of is a dead link, not a typo, so
+ * only that case swaps in DEAD_LINK_MESSAGE. Everything else (full, already
+ * started, server unreachable) keeps its own reason, which is what the invite
+ * path used to throw away.
+ */
+export function describeInviteError(e: unknown): string {
+  const code = (e as { code?: unknown } | null)?.code
+  if (code === 'NOT_FOUND' || code === 4212) return DEAD_LINK_MESSAGE
+  return describeJoinError(e)
+}
+
 export async function joinCatanMatch(code: string): Promise<void> {
   useCatanStore.getState().setStatus('connecting')
   const c = code.toUpperCase()
