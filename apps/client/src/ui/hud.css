@@ -77,7 +77,7 @@
   color: #fff;
   cursor: pointer;
 }
-.end-turn:disabled { opacity: 0.4; cursor: default; }
+.end-turn:disabled { background: #23303a; color: rgba(255, 255, 255, 0.6); cursor: default; }
 .toast {
   position: absolute;
   bottom: 18px;
@@ -238,7 +238,8 @@
   left: 18px;
   display: flex;
   gap: 8px;
-  background: rgba(12, 14, 20, 0.8);
+  /* opaque enough that the board never shows between the buttons */
+  background: rgba(12, 14, 20, 0.92);
   padding: 8px 10px;
   border-radius: 8px;
 }
@@ -253,7 +254,15 @@
   cursor: pointer;
 }
 .build-bar-btn.active { background: #2c6e8f; border-color: #7fc8e8; color: #fff; }
-.build-bar-btn:disabled { opacity: 0.4; cursor: default; }
+/* Dim the button, never its opacity: `opacity` faded the button's own surface
+   too, so a lit board tile read straight through the City and Dev Card labels
+   and dropped them under 4.5:1. The surface stays opaque, the label dims. */
+.build-bar-btn:disabled {
+  background: #1b1d25;
+  color: rgba(232, 232, 240, 0.62);
+  cursor: default;
+}
+.build-bar-btn:disabled .build-cost { opacity: 0.5; }
 .build-cost {
   display: flex;
   justify-content: center;
@@ -339,12 +348,14 @@
   cursor: pointer;
 }
 .steal-victim-btn:hover { background: #2c6e8f; }
+/* Every panel below floats on the 3D board, so its surface carries the text's
+   contrast: at 0.8 a lit tile or a port sign read straight through the label. */
 .catan-hud .turn-banner {
   position: absolute;
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(12, 14, 20, 0.8);
+  background: rgba(12, 14, 20, 0.92);
   padding: 8px 18px;
   border-radius: 8px;
   font-size: 15px;
@@ -381,7 +392,7 @@
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  background: rgba(12, 14, 20, 0.8);
+  background: rgba(12, 14, 20, 0.92);
   padding: 4px 14px;
   border-radius: 8px;
   font-variant-numeric: tabular-nums;
@@ -398,7 +409,7 @@
   color: #fff;
   cursor: pointer;
 }
-.catan-hud .roll-button:disabled { opacity: 0.4; cursor: default; }
+.catan-hud .roll-button:disabled { background: #2b3a31; color: rgba(255, 255, 255, 0.6); cursor: default; }
 .catan-hud .hand-strip {
   /* Sits above .build-bar (also bottom:18px/left:18px) so the two never
      overlap — the bar grew ~16px when cost rows landed under the labels. */
@@ -407,7 +418,7 @@
   left: 18px;
   display: flex;
   gap: 6px;
-  background: rgba(12, 14, 20, 0.8);
+  background: rgba(12, 14, 20, 0.92);
   padding: 8px 12px;
   border-radius: 8px;
 }
@@ -454,7 +465,7 @@
 }
 .action-log-header {
   align-self: flex-end;
-  background: rgba(10, 14, 18, 0.55);
+  background: rgba(10, 14, 18, 0.85);
   color: #d8d2c4;
   border: none;
   border-radius: 4px;
@@ -462,14 +473,15 @@
   font-size: 11px;
   cursor: pointer;
 }
+/* same reason as the panels above: these lines sit on the board */
 .action-log-entry {
-  background: rgba(10, 14, 18, 0.55);
+  background: rgba(10, 14, 18, 0.85);
   border-radius: 4px;
   padding: 3px 6px;
   line-height: 1.5;
 }
 .action-log-entry.affects-you {
-  background: rgba(44, 110, 143, 0.45);
+  background: rgba(44, 110, 143, 0.8);
 }
 .action-log-entry .log-seat { font-weight: 600; }
 /* Launch pre-labels can be long Discord names; keep a line to one row. */
@@ -483,7 +495,7 @@
   overflow-y: auto;
 }
 .opponent-card {
-  background: rgba(12, 14, 20, 0.8);
+  background: rgba(12, 14, 20, 0.92);
   padding: 6px 12px;
   border-radius: 8px;
   font-size: 12px;
@@ -605,7 +617,7 @@
   /* same contrast trap as .trade-panel: fixed panel outside .overlay */
   color: #e8e8f0;
   font-family: ui-sans-serif, system-ui, sans-serif;
-  background: rgba(12, 14, 20, 0.8);
+  background: rgba(12, 14, 20, 0.92);
   padding: 8px 10px;
   border-radius: 8px;
 }
@@ -656,3 +668,114 @@
 .bank-chip .res-name { font-size: 11px; text-transform: capitalize; display: flex; align-items: center; gap: 4px; }
 .bank-rate { font-size: 10px; opacity: 0.75; font-variant-numeric: tabular-nums; }
 .trade-footnote { font-size: 11px; opacity: 0.6; text-align: center; }
+
+/* --- narrow viewports (phones) ---------------------------------------------
+   Every match-HUD panel above is pinned to a corner at a size tuned for a
+   desktop window. At 390px those pins collide: the player cards land on the
+   turn banner, the build bar runs off the right edge (Trade and Mute with
+   it), and Roll / END TURN sit underneath the bar. The rules below re-stack
+   the same panels into three bands - banner and cards at the top, the board
+   in the middle, the bottom cluster in a fixed order above the build bar -
+   and let the bar wrap to two rows of three so nothing leaves the screen.
+   The stack offsets follow from that: a wrapped bar is ~132px tall, so the
+   turn controls sit at 140px, the hand above them, dev cards above that. */
+@media (max-width: 560px) {
+  .catan-hud .turn-banner {
+    top: 8px;
+    /* `left: 50%` alone caps an absolutely positioned box at the remaining
+       half of the screen, which wrapped a 250px sentence inside 195px */
+    width: max-content;
+    max-width: calc(100vw - 16px);
+    padding: 7px 14px;
+    font-size: 14px;
+    text-align: center;
+  }
+  .catan-hud .dice-display { top: 52px; padding: 3px 10px; font-size: 13px; }
+  /* the copy is desktop-only ("scroll to zoom") and this is exactly where the
+     player cards now sit */
+  .orbit-hint { display: none; }
+  .connection-strip { top: 52px; }
+
+  .catan-hud .right-rail {
+    top: 116px;
+    right: 8px;
+    left: 8px;
+    align-items: flex-end;
+    gap: 6px;
+  }
+  .catan-hud .opponent-strip,
+  .catan-hud .opponent-strip.compact {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+  .catan-hud .opponent-card,
+  .catan-hud .opponent-strip.compact .opponent-card {
+    min-width: 0;
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+  .opponent-stats { gap: 6px; }
+  .action-log { width: min(210px, 62vw); }
+  .action-log-panel { max-height: 30vh; }
+
+  .build-bar {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px;
+  }
+  /* three per row, so the six controls always land as two full rows */
+  .build-bar-btn {
+    flex: 1 1 calc(33.333% - 4px);
+    min-width: 0;
+    padding: 9px 6px;
+    font-size: 13px;
+  }
+  .mute-pill {
+    flex: 1 1 calc(33.333% - 4px);
+    align-self: stretch;
+    padding: 9px 6px;
+    font-size: 12px;
+  }
+
+  .catan-hud .roll-button { right: auto; left: 8px; bottom: 140px; }
+  .end-turn { right: 8px; bottom: 140px; }
+  .catan-hud .hand-strip {
+    left: 8px;
+    right: 8px;
+    bottom: 192px;
+    justify-content: center;
+    padding: 6px 8px;
+  }
+  .hand-count { min-width: 0; flex: 1 1 0; }
+  .dev-strip { left: 8px; right: 8px; bottom: 252px; }
+  .dev-cards-row { flex-wrap: wrap; }
+  .dev-card-tile { flex: 1 1 86px; width: auto; }
+
+  .trade-panel {
+    /* it now covers the hand and the turn controls rather than sitting beside
+       them, so it stops being see-through */
+    background: #0c0e14;
+    left: 8px;
+    right: 8px;
+    bottom: 140px;
+    width: auto;
+    max-height: calc(100dvh - 300px);
+    overflow-y: auto;
+  }
+  .offer-banner {
+    top: 116px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    transform: none;
+    padding: 12px;
+  }
+  .modal { min-width: 0; width: min(100%, 340px); }
+  .modal-backdrop { padding: 16px; box-sizing: border-box; }
+}
