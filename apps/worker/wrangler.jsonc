@@ -7,5 +7,13 @@
   "vars": { "CLIENT_ORIGIN": "http://localhost:5173", "APP_VERSION": "dev" },
   "durable_objects": { "bindings": [{ "name": "MATCH", "class_name": "CatanMatch" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CatanMatch"] }],
+  // Per-IP abuse guards (src/guard.ts). Opening a room costs a Durable
+  // Object, so it is the tight one; the lookup limit is what slows a caller
+  // walking the four-letter code space. The namespaces are Meridian's own:
+  // an id shared with another Worker would share the counters too.
+  "ratelimits": [
+    { "name": "OPEN_LIMIT", "namespace_id": "2001", "simple": { "limit": 6, "period": 60 } },
+    { "name": "LOOKUP_LIMIT", "namespace_id": "2002", "simple": { "limit": 60, "period": 60 } }
+  ],
   "observability": { "enabled": true }
 }

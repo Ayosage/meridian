@@ -1,10 +1,19 @@
 /**
- * Abuse guards that run before match-core's router: a body cap and a per-IP
- * ceiling on room creation. `POST /matches/open` needs no token and spawns a
- * Durable Object per call, so without these one script can mint rooms as fast
- * as it can post, and any route will happily buffer a megabyte of JSON.
+ * Abuse guards that run before match-core's router: a body cap and per-IP
+ * ceilings on the two unauthenticated routes. `POST /matches/open` needs no
+ * token and spawns a Durable Object per call, and `GET /matches/CODE` is how
+ * a caller walks the four-letter code space looking for someone's game.
+ * Without these, one script can mint rooms as fast as it can post, and any
+ * route will happily buffer a megabyte of JSON.
  *
- * Both are pure enough to test without a Worker: index.ts owns the wiring.
+ * The ceilings are Cloudflare's rate limit bindings, declared in
+ * wrangler.jsonc. Cloudflare counts them per location, cached per machine and
+ * updated asynchronously, and calls them "permissive, eventually consistent,
+ * and intentionally designed to not be used as an accurate accounting
+ * system". So this is a speed bump, not a quota: a caller spread across fresh
+ * connections still gets through. What it is not carrying any more is the
+ * cost of a probe, which match-core fixed at the source by building a room's
+ * schema on first write rather than in the object's constructor.
  */
 
 /**
@@ -13,60 +22,23 @@
  */
 export const MAX_BODY_BYTES = 16 * 1024
 
-export interface RateSpec {
-  /** Requests allowed per window, per key. */
-  limit: number
-  windowMs: number
-  /** Keys tracked before the oldest are dropped; bounds the map's memory. */
-  maxKeys: number
+/** Both windows are a minute wide, so this is what a refused caller waits. */
+export const RETRY_AFTER_SECONDS = 60
+
+export interface Limiters {
+  /** Bound in wrangler.jsonc. Absent under vitest and a plain `wrangler dev`, which then do not throttle. */
+  OPEN_LIMIT?: RateLimit
+  LOOKUP_LIMIT?: RateLimit
 }
 
-/** Room creation: generous for a person at a keyboard, closed to a loop. */
-export const OPEN_RATE: RateSpec = { limit: 6, windowMs: 60_000, maxKeys: 4096 }
+/** A GET that reads one room by code: `/matches/ABCD`, with or without the socket upgrade. */
+export const CODE_ROUTE = /^\/matches\/[A-Z0-9]{1,12}(\/ws)?$/
 
-export type RateVerdict = { ok: true } | { ok: false; retryAfterSeconds: number }
-
-/**
- * Sliding-window counter held in the isolate.
- *
- * Deliberately not durable: the point is to stop one address hammering one
- * Worker instance, which is where a burst lands, and doing it in memory costs
- * no storage and nothing to run. An attacker spread across many colos (or
- * many addresses) still gets through, so this is a speed bump, not a quota.
- * A global ceiling would need a shared counter (a Durable Object, or
- * Cloudflare's rate-limiting binding).
- */
-export class RateLimiter {
-  private readonly hits = new Map<string, number[]>()
-
-  constructor(private readonly spec: RateSpec) {}
-
-  /** Records an attempt for `key`, and says whether it is allowed. */
-  take(key: string, now: number): RateVerdict {
-    const cutoff = now - this.spec.windowMs
-    const recent = (this.hits.get(key) ?? []).filter((t) => t > cutoff)
-    if (recent.length >= this.spec.limit) {
-      this.hits.set(key, recent)
-      const oldest = recent[0] ?? now
-      return { ok: false, retryAfterSeconds: Math.max(1, Math.ceil((oldest + this.spec.windowMs - now) / 1000)) }
-    }
-    recent.push(now)
-    this.hits.set(key, recent)
-    if (this.hits.size > this.spec.maxKeys) this.prune(cutoff)
-    return { ok: true }
-  }
-
-  /** Drop keys with nothing left in the window, then the oldest until we fit. */
-  private prune(cutoff: number): void {
-    for (const [key, times] of this.hits) {
-      if (times.every((t) => t <= cutoff)) this.hits.delete(key)
-    }
-    // Map iterates in insertion order, so this sheds the least recently seen.
-    for (const key of this.hits.keys()) {
-      if (this.hits.size <= this.spec.maxKeys) break
-      this.hits.delete(key)
-    }
-  }
+/** True when this caller has spent the window. An unbound limiter never refuses. */
+export async function overLimit(limiter: RateLimit | undefined, key: string): Promise<boolean> {
+  if (!limiter) return false
+  const { success } = await limiter.limit({ key })
+  return !success
 }
 
 /** The caller's address, as Cloudflare saw it. */
