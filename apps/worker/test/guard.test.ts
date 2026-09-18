@@ -1,6 +1,7 @@
-import { SELF } from 'cloudflare:test'
+import { env, SELF } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
-import { MAX_BODY_BYTES, OPEN_RATE, RateLimiter, clientIp, readCapped } from '../src/guard'
+import worker from '../src/index'
+import { CODE_ROUTE, MAX_BODY_BYTES, clientIp, overLimit, readCapped } from '../src/guard'
 
 const json = (body: string) =>
   SELF.fetch('https://x/matches/open', {
@@ -9,35 +10,46 @@ const json = (body: string) =>
     body,
   })
 
-describe('RateLimiter', () => {
-  const spec = { limit: 3, windowMs: 1000, maxKeys: 8 }
+describe('overLimit', () => {
+  /** Stands in for the platform binding, which vitest does not provide. */
+  const limiterAllowing = (n: number): RateLimit => {
+    const seen = new Map<string, number>()
+    return {
+      limit: async ({ key }: { key?: string }) => {
+        const used = (seen.get(key ?? '') ?? 0) + 1
+        seen.set(key ?? '', used)
+        return { success: used <= n }
+      },
+    } as RateLimit
+  }
 
-  it('allows up to the limit, then refuses with a retry-after', () => {
-    const rl = new RateLimiter(spec)
-    expect(rl.take('1.1.1.1', 0)).toEqual({ ok: true })
-    expect(rl.take('1.1.1.1', 100)).toEqual({ ok: true })
-    expect(rl.take('1.1.1.1', 200)).toEqual({ ok: true })
-    expect(rl.take('1.1.1.1', 300)).toEqual({ ok: false, retryAfterSeconds: 1 })
+  it('passes callers until the window is spent, then refuses', async () => {
+    const rl = limiterAllowing(2)
+    expect(await overLimit(rl, 'open:1.1.1.1')).toBe(false)
+    expect(await overLimit(rl, 'open:1.1.1.1')).toBe(false)
+    expect(await overLimit(rl, 'open:1.1.1.1')).toBe(true)
   })
 
-  it('counts each address on its own', () => {
-    const rl = new RateLimiter(spec)
-    for (const t of [0, 1, 2]) rl.take('1.1.1.1', t)
-    expect(rl.take('2.2.2.2', 3)).toEqual({ ok: true })
+  it('counts each key on its own, so one address cannot spend another budget', async () => {
+    const rl = limiterAllowing(1)
+    expect(await overLimit(rl, 'open:1.1.1.1')).toBe(false)
+    expect(await overLimit(rl, 'open:2.2.2.2')).toBe(false)
+    expect(await overLimit(rl, 'lookup:1.1.1.1')).toBe(false)
+    expect(await overLimit(rl, 'open:1.1.1.1')).toBe(true)
   })
 
-  it('lets the window slide', () => {
-    const rl = new RateLimiter(spec)
-    for (const t of [0, 100, 200]) rl.take('1.1.1.1', t)
-    expect(rl.take('1.1.1.1', 900).ok).toBe(false)
-    expect(rl.take('1.1.1.1', 1201)).toEqual({ ok: true })
+  it('never refuses when the binding is missing, so a local run still works', async () => {
+    expect(await overLimit(undefined, 'open:1.1.1.1')).toBe(false)
   })
+})
 
-  it('stays bounded when every request brings a new address', () => {
-    const rl = new RateLimiter(spec)
-    for (let i = 0; i < 500; i++) rl.take(`10.0.0.${i}`, i)
-    // still counting: the most recent key is fresh, not evicted mid-window
-    expect(rl.take('10.0.0.499', 500)).toEqual({ ok: true })
+describe('CODE_ROUTE', () => {
+  it('matches a room read and its socket, and nothing else', () => {
+    expect(CODE_ROUTE.test('/matches/ABCD')).toBe(true)
+    expect(CODE_ROUTE.test('/matches/ABCD/ws')).toBe(true)
+    expect(CODE_ROUTE.test('/matches/open')).toBe(false)
+    expect(CODE_ROUTE.test('/matches')).toBe(false)
+    expect(CODE_ROUTE.test('/healthz')).toBe(false)
   })
 })
 
@@ -83,8 +95,64 @@ describe('worker guards', () => {
     expect((await json(JSON.stringify({ players: 4, bots: 0 }))).status).toBe(201)
   })
 
-  it('the open ceiling is a minute wide and single digit', () => {
-    expect(OPEN_RATE.limit).toBeLessThan(10)
-    expect(OPEN_RATE.windowMs).toBe(60_000)
+  /** The real env, minus the knob that waves E2E suites past the ceilings. */
+  const live = (limiters: Partial<Record<'OPEN_LIMIT' | 'LOOKUP_LIMIT', RateLimit>>) => ({
+    ...env,
+    TEST_KNOBS: undefined,
+    ...limiters,
+  })
+
+  const spent: RateLimit = { limit: async () => ({ success: false }) } as RateLimit
+
+  it('refuses a room when the open ceiling is spent, and says how long to wait', async () => {
+    const res = await worker.fetch(
+      new Request('https://x/matches/open', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'cf-connecting-ip': '9.9.9.9' },
+        body: JSON.stringify({ players: 4, bots: 0 }),
+      }),
+      live({ OPEN_LIMIT: spent }) as never,
+    )
+    expect(res.status).toBe(429)
+    expect(res.headers.get('retry-after')).toBe('60')
+    expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
+  })
+
+  it('refuses a code lookup when the lookup ceiling is spent', async () => {
+    const res = await worker.fetch(
+      new Request('https://x/matches/ABCD', { headers: { 'cf-connecting-ip': '9.9.9.9' } }),
+      live({ LOOKUP_LIMIT: spent }) as never,
+    )
+    expect(res.status).toBe(429)
+  })
+
+  it('leaves the launcher route alone, so one Steward is not throttled for everyone', async () => {
+    const res = await worker.fetch(
+      new Request('https://x/matches', {
+        method: 'POST',
+        headers: { authorization: 'Bearer test-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ players: 4, bots: 0 }),
+      }),
+      live({ OPEN_LIMIT: spent, LOOKUP_LIMIT: spent }) as never,
+    )
+    expect(res.status).toBe(201)
+  })
+
+  it('spends the open and lookup budgets under separate keys', async () => {
+    const keys: string[] = []
+    const record: RateLimit = { limit: async ({ key }) => (keys.push(key ?? ''), { success: true }) } as RateLimit
+    await worker.fetch(
+      new Request('https://x/matches/open', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'cf-connecting-ip': '9.9.9.9' },
+        body: JSON.stringify({ players: 4, bots: 0 }),
+      }),
+      live({ OPEN_LIMIT: record }) as never,
+    )
+    await worker.fetch(
+      new Request('https://x/matches/ABCD', { headers: { 'cf-connecting-ip': '9.9.9.9' } }),
+      live({ LOOKUP_LIMIT: record }) as never,
+    )
+    expect(keys).toEqual(['open:9.9.9.9', 'lookup:9.9.9.9'])
   })
 })
